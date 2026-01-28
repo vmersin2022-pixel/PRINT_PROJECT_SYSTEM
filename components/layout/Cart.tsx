@@ -21,7 +21,7 @@ const Cart: React.FC = () => {
         {/* Header */}
         <div className="p-6 border-b border-black bg-white flex justify-between items-center">
           <h2 className="font-jura text-xl font-bold uppercase tracking-wider">
-            Корзина
+            КОРЗИНА
           </h2>
           <button onClick={toggleCart} className="hover:rotate-90 transition-transform">
             <X size={24} />
@@ -33,7 +33,7 @@ const Cart: React.FC = () => {
           {cart.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-zinc-400">
               <span className="font-jura text-lg">[ ПУСТО ]</span>
-              <p className="font-montserrat text-sm mt-2">Добавьте товары в заказ.</p>
+              <p className="font-montserrat text-sm mt-2">ПОКА ЗДЕСЬ ПУСТО</p>
             </div>
           ) : (
             cart.map((item) => (
@@ -54,7 +54,7 @@ const Cart: React.FC = () => {
                     QTY: {item.quantity}
                   </div>
                   <div className="mt-2 font-bold font-jura">
-                    ${item.price.toFixed(2)}
+                    {item.price.toFixed(0)} ₽
                   </div>
                 </div>
               </div>
@@ -67,10 +67,10 @@ const Cart: React.FC = () => {
           <div className="p-6 bg-white border-t border-black">
             <div className="flex justify-between items-center mb-6 font-jura text-lg font-bold">
               <span>ИТОГО</span>
-              <span>${total.toFixed(2)}</span>
+              <span>{total.toFixed(0)} ₽</span>
             </div>
             <FancyButton fullWidth variant="shutter" onClick={() => alert('Checkout flow initiated')}>
-              Оформить заказ
+              ОФОРМИТЬ ЗАКАЗ
             </FancyButton>
           </div>
         )}

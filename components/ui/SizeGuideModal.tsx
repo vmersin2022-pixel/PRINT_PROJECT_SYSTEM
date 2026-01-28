@@ -56,6 +56,18 @@ const SizeGuideModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 <td className="p-4">76</td>
                 <td className="p-4">25</td>
               </tr>
+              <tr>
+                <td className="p-4 font-bold">2XL</td>
+                <td className="p-4">66</td>
+                <td className="p-4">78</td>
+                <td className="p-4">26</td>
+              </tr>
+              <tr>
+                <td className="p-4 font-bold">3XL</td>
+                <td className="p-4">70</td>
+                <td className="p-4">80</td>
+                <td className="p-4">27</td>
+              </tr>
             </tbody>
           </table>
         </div>

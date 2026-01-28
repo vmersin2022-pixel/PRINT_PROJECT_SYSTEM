@@ -16,23 +16,41 @@
             fontFamily: {
               jura: ['Jura', 'sans-serif'],
               montserrat: ['Montserrat', 'sans-serif'],
-              mono: ['monospace'] // Fallback for technical readouts
+              mono: ['monospace']
             },
             colors: {
               'blue': {
-                900: '#1e3a8a',
+                // RAL 5009 PALETTE (Azure Blue)
+                400: '#4F7AA8', // Lighter accent
+                500: '#3E6996', // Mid
+                600: '#2E5984', // RAL 5009 MAIN
+                700: '#244668', // Darker
+                900: '#152A3E', // Deepest
+              },
+              'steel': {
+                100: '#F4F4F5',
+                300: '#D4D4D8',
+                400: '#A1A1AA',
+                500: '#71717A',
               }
             },
             animation: {
               'marquee': 'marquee 25s linear infinite',
+              'marquee-vertical': 'marqueeVertical 25s linear infinite',
               'fade-up': 'fadeUp 0.8s ease-out forwards',
               'fade-in': 'fadeIn 0.3s ease-out forwards',
               'slide-in-right': 'slideInRight 0.4s ease-out forwards',
+              'spin-slow': 'spin 12s linear infinite',
+              'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
             },
             keyframes: {
               marquee: {
                 '0%': { transform: 'translateX(0%)' },
                 '100%': { transform: 'translateX(-50%)' },
+              },
+              marqueeVertical: {
+                '0%': { transform: 'translateY(0%)' },
+                '100%': { transform: 'translateY(-50%)' },
               },
               fadeUp: {
                 '0%': { opacity: '0', transform: 'translateY(20px)' },
@@ -52,28 +70,68 @@
       }
     </script>
     <style>
-      /* Smooth scrolling for anchor links if needed */
+      /* Hide Default Cursor */
+      body {
+        cursor: none;
+      }
+      a, button, input, textarea, select {
+        cursor: none;
+      }
+
       html {
         scroll-behavior: smooth;
       }
-      /* Custom Scrollbar for a more tech feel */
+      
       ::-webkit-scrollbar {
-        width: 8px;
+        width: 6px;
       }
       ::-webkit-scrollbar-track {
         background: #000;
       }
       ::-webkit-scrollbar-thumb {
-        background: #333;
-        border: 1px solid #000;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #1e3a8a;
+        background: #2E5984; /* RAL 5009 Scroll Thumb */
       }
       
-      /* Text Stroke Utility for "Character/Mood/Interests" scene */
+      .bg-noise {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+        z-index: 50;
+        opacity: 0.08; 
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+        mix-blend-mode: overlay;
+      }
+
       .text-stroke-white {
         -webkit-text-stroke: 1px white;
+      }
+
+      /* RAL 5009 GRADIENT UTILITY */
+      .text-ral-gradient {
+        background: linear-gradient(to right, #ffffff 0%, #2E5984 50%, #ffffff 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        background-size: 200% auto;
+        animation: shine 4s linear infinite;
+      }
+
+      @keyframes shine {
+        to {
+          background-position: 200% center;
+        }
+      }
+      
+      @media (pointer: coarse) {
+        body, a, button {
+          cursor: auto;
+        }
+        #custom-cursor {
+          display: none;
+        }
       }
     </style>
   <script type="importmap">
@@ -83,12 +141,13 @@
     "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
     "react": "https://esm.sh/react@^19.2.4",
-    "react/": "https://esm.sh/react@^19.2.4/"
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.93.2"
   }
 }
 </script>
 </head>
-  <body class="bg-white text-black antialiased">
+  <body class="bg-zinc-50 text-black antialiased overflow-x-hidden">
     <div id="root"></div>
   </body>
 </html>

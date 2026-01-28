@@ -22,15 +22,16 @@ const FancyButton: React.FC<FancyButtonProps> = ({
 }) => {
   const baseClasses = `
     relative overflow-hidden font-jura uppercase tracking-widest text-sm font-bold 
-    border border-black transition-all duration-300 group
+    border border-white transition-all duration-300 group
     ${fullWidth ? 'w-full flex justify-center py-4' : 'px-8 py-3 inline-block'}
     ${className}
   `;
 
   const content = (
     <>
+      {/* Shutter Effect Layer: RAL 5009 */}
       {variant === 'shutter' && (
-        <span className="absolute inset-0 bg-blue-900 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-0" />
+        <span className="absolute inset-0 bg-blue-600 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-0" />
       )}
       
       {variant === 'marquee' && (
@@ -41,7 +42,7 @@ const FancyButton: React.FC<FancyButtonProps> = ({
         </div>
       )}
 
-      <span className={`relative z-10 flex items-center gap-2 ${variant === 'shutter' ? 'group-hover:text-white transition-colors duration-300' : ''}`}>
+      <span className={`relative z-10 flex items-center gap-2 ${variant === 'shutter' ? 'text-white group-hover:text-white transition-colors duration-300' : ''}`}>
         {children}
       </span>
     </>
@@ -49,9 +50,11 @@ const FancyButton: React.FC<FancyButtonProps> = ({
 
   const variantClasses = {
     marquee: 'bg-white text-black hover:bg-black hover:text-white',
-    shutter: 'bg-white text-black',
-    ghost: 'bg-transparent text-black hover:bg-black hover:text-white',
-    solid: 'bg-black text-white hover:bg-blue-900 hover:border-blue-900'
+    // Shutter: Default White Border/Text, Hover -> RAL 5009 BG / White Text
+    shutter: 'bg-transparent text-white border-white hover:border-blue-600', 
+    ghost: 'bg-transparent text-black border-black hover:bg-black hover:text-white',
+    // Solid: Black BG, Hover -> RAL 5009 BG
+    solid: 'bg-black text-white hover:bg-blue-600 hover:border-blue-600'
   };
 
   const finalClass = `${baseClasses} ${variantClasses[variant]}`;

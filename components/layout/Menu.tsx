@@ -16,11 +16,11 @@ const Menu: React.FC = () => {
 
   const links = [
     { name: 'Главная', path: '/' },
-    { name: 'Каталог', path: '/catalog' },
-    { name: 'Футболки', path: '/catalog?category=t-shirts' },
-    { name: 'Комплекты', path: '/catalog?category=sets' },
-    { name: 'Sale', path: '/catalog?category=sale' },
-    { name: 'Admin', path: '/admin' },
+    { name: 'Все товары', path: '/catalog' },
+    { name: 'Свежий Drop', path: '/catalog?filter=new' }, // Leads to products with NEW tag
+    { name: 'Коллекции', path: '/collections' },
+    { name: 'А это для двоих', path: '/catalog?collection=duo' },
+    { name: 'Завершаем дроп', path: '/catalog?category=last_drop' }, // Changed to category
   ];
 
   return (
@@ -45,7 +45,7 @@ const Menu: React.FC = () => {
             <Link 
               key={link.name} 
               to={link.path}
-              className="font-jura text-4xl uppercase font-bold tracking-wider hover:text-blue-900 hover:pl-4 transition-all duration-300 flex items-center group"
+              className="font-jura text-3xl sm:text-4xl uppercase font-bold tracking-wider hover:text-blue-900 hover:pl-4 transition-all duration-300 flex items-center group"
             >
               <span className="opacity-0 group-hover:opacity-100 -ml-4 transition-opacity text-blue-900 mr-2 text-xl">
                 <ChevronRight />
