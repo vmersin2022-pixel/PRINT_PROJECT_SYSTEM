@@ -46,7 +46,8 @@ const Home: React.FC = () => {
       <section className="relative h-screen flex items-center border-b border-black overflow-hidden">
         {/* Background Elements */}
         <div className="absolute inset-0 z-0">
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1542491171-881c1c9c8119?q=80&w=2070&auto=format&fit=crop')] bg-cover bg-center grayscale opacity-20" />
+          {/* UPDATED: Local Image as Background Cover */}
+          <div className="absolute inset-0 bg-[url('/public/images/Generated-Image-January-28_-2026-10_16AM.jpeg')] bg-cover bg-center grayscale opacity-40" />
           <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent" />
           {/* Tech Grid Overlay */}
           <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.05)_1px,transparent_1px)] bg-[size:40px_40px]" />
@@ -56,12 +57,12 @@ const Home: React.FC = () => {
           <div className="max-w-6xl w-full animate-fade-up relative">
             
             <div className="relative mb-8">
-              <h1 className="font-jura text-6xl md:text-8xl lg:text-9xl font-bold uppercase leading-[0.85] mb-6 tracking-tighter">
+              <h1 className="font-jura text-6xl md:text-8xl lg:text-9xl font-bold uppercase leading-[0.85] mb-6 tracking-tighter mix-blend-hard-light">
                 НЕ<br />
                 СЛУЧАЙНЫЕ<br />
                 ПРИНТЫ
               </h1>
-              <p className="font-montserrat text-sm md:text-base max-w-[500px] text-blue-900 font-medium leading-relaxed">
+              <p className="font-montserrat text-sm md:text-base max-w-[500px] text-blue-900 font-medium leading-relaxed bg-white/50 backdrop-blur-sm p-2">
                 Принтов слишком много.
                 Футболок — ещё больше.
                 Мы убрали лишнее и собрали принты,которые хочется носить.
@@ -222,69 +223,46 @@ const Home: React.FC = () => {
         </div>
       </section>
 
-      {/* ИГРА - SPLIT LAYOUT */}
-      <section className="bg-black py-24 relative overflow-hidden">
+      {/* ИГРА - UPDATED: FULL WIDTH RECTANGULAR LAYOUT */}
+      <section className="relative w-full h-[85vh] bg-black border-t border-black overflow-hidden flex items-center justify-center">
         {/* Background Ambience */}
-        <div className="absolute top-1/2 left-1/4 w-[500px] h-[500px] bg-blue-900/10 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute top-1/2 left-1/4 w-[500px] h-[500px] bg-blue-900/20 rounded-full blur-[120px] pointer-events-none" />
 
-        <div className="container mx-auto px-4 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center">
-            
-            {/* Left: Visual/Cover */}
-            <div className="relative group order-2 lg:order-1 flex justify-center">
-              {/* HUD Elements (Rotating Rings) */}
-              <div className="absolute inset-0 border border-zinc-800/50 rounded-full scale-[1.3] opacity-0 lg:opacity-100 animate-[spin_20s_linear_infinite]" />
-              <div className="absolute inset-0 border border-dashed border-zinc-700/50 rounded-full scale-[1.5] opacity-0 lg:opacity-100 animate-[spin_30s_linear_infinite_reverse]" />
-              
-              {/* Main Image Container */}
-              <div className="relative w-full max-w-md aspect-square bg-zinc-900 border border-zinc-800 overflow-hidden shadow-2xl shadow-blue-900/20">
-                <img 
-                  src="/images/game-cover.jpg" 
-                  alt="Game Interface"
-                  className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
-                />
-                
-                {/* Scanline overlay */}
-                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px] pointer-events-none opacity-50" />
-                
-                {/* Glitch text overlay on image */}
-                <div className="absolute top-4 right-4 font-mono text-[10px] text-blue-500 animate-pulse">
-                   Target_Lock [ACTIVE]
-                </div>
-                <div className="absolute bottom-4 left-4 font-mono text-[10px] text-white/50">
-                  SYS.CORE.V.09 // UPLOAD
-                </div>
-                
-                {/* Corner Brackets */}
-                <div className="absolute top-2 left-2 w-4 h-4 border-l border-t border-white/50" />
-                <div className="absolute bottom-2 right-2 w-4 h-4 border-r border-b border-white/50" />
-              </div>
+        {/* Full Screen Image Background */}
+        <div className="absolute inset-0 z-0">
+          <img 
+            src="https://vwspjdsmdxmbzrancyhy.supabase.co/storage/v1/object/public/images/Generated-Image-January-28_-2026-10_16AM.jpeg" 
+            alt="Game Interface"
+            className="w-full h-full object-cover opacity-60"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
+          <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px] pointer-events-none opacity-50" />
+        </div>
+
+        {/* Content Container */}
+        <div className="container mx-auto px-4 relative z-10 flex flex-col justify-center items-start h-full">
+          <div className="max-w-2xl">
+            <div className="inline-flex items-center gap-2 border border-blue-500/50 bg-blue-900/20 px-3 py-1 mb-4 backdrop-blur-md">
+              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
+              <span className="font-mono text-xs text-blue-300 tracking-widest">INTERACTIVE_MODE</span>
             </div>
 
-            {/* Right: Content */}
-            <div className="text-left order-1 lg:order-2">
-               <div className="inline-flex items-center gap-2 border border-blue-900/30 bg-blue-900/10 px-3 py-1 mb-6">
-                  <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                  <span className="font-mono text-xs text-blue-400 tracking-widest">INTERACTIVE_MODE</span>
-               </div>
+            <h2 className="font-jura text-5xl md:text-7xl font-bold uppercase text-white mb-4 leading-[0.9] drop-shadow-2xl">
+              PRINT<br />PROJECT<br />
+              <span className="text-transparent text-stroke-white">GAME</span>
+            </h2>
 
-               <h2 className="font-jura text-5xl md:text-7xl font-bold uppercase text-white mb-6 leading-[0.9]">
-                 PRINT<br />PROJECT<br />
-                 <span className="text-transparent text-stroke-white">GAME</span>
-               </h2>
+            {/* Уменьшенный блок текста с неоновой линией */}
+            <p className="font-montserrat text-zinc-300 text-sm md:text-base max-w-md mb-6 leading-relaxed border-l-4 border-white shadow-[calc(-4px)_0_15px_rgba(59,130,246,0.8)] pl-6 bg-black/20 p-3 backdrop-blur-sm">
+              Это не просто магазин. Это игра, где ты выбираешь состояние,
+              а мы показываем принты, которые с ним совпадают.
+              <br />
+              <span className="text-white font-bold mt-1 block">Синхронизируй свой стиль с внутренним кодом.</span>
+            </p>
 
-               <p className="font-montserrat text-zinc-400 max-w-md mb-8 leading-relaxed border-l-2 border-zinc-800 pl-4">
-                 Это не просто магазин. Это игра, где ты выбираешь состояние,
-                 а мы показываем принты, которые с ним совпадают.
-                 <br /><br />
-                 <span className="text-white font-bold">Синхронизируй свой внешний вид с внутренним кодом.</span>
-               </p>
-
-               <FancyButton to="/catalog?category=sets" variant="shutter">
-                 АКТИВИРОВАТЬ СОСТОЯНИЕ
-               </FancyButton>
-            </div>
-
+            <FancyButton to="/catalog?category=sets" variant="shutter">
+              АКТИВИРОВАТЬ СОСТОЯНИЕ
+            </FancyButton>
           </div>
         </div>
       </section>
