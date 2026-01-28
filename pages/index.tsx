@@ -239,10 +239,9 @@ const Home: React.FC = () => {
               {/* Main Image Container */}
               <div className="relative w-full max-w-md aspect-square bg-zinc-900 border border-zinc-800 overflow-hidden shadow-2xl shadow-blue-900/20">
                 <img 
-                  src="/images/game-cover.png" 
+                  src="/images/game-cover.jpg" 
                   alt="Game Interface"
                   className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
-                  }}
                 />
                 
                 {/* Scanline overlay */}
