@@ -173,7 +173,7 @@ const ProfilePage: React.FC = () => {
                         {/* Если кнопка "Wait..." не исчезает, значит домен не добавлен в BotFather */}
                         <div className="flex justify-center w-full">
                             <TelegramWidget 
-                                botName="print_project_bot" 
+                                botName="print_project_shop_bot" 
                                 onAuth={handleTelegramAuth} 
                                 usePic={false} // Cleaner look without avatar
                                 cornerRadius={0} // Sharp corners to match theme
