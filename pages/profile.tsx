@@ -42,7 +42,8 @@ const ProfilePage: React.FC = () => {
               const { error } = await loginWithPassword(email, password);
               if (error) {
                  if (error.message.includes('Invalid login credentials')) {
-                     throw new Error('Неверный Email или пароль');
+                     // Check if it might be unconfirmed email
+                     throw new Error('Неверный Email или пароль (или почта не подтверждена).');
                  }
                  throw error;
               }
@@ -54,10 +55,8 @@ const ProfilePage: React.FC = () => {
               if (error) throw error;
               
               // INTELLIGENT REGISTRATION CHECK:
-              // If Supabase has "Enable Email Confirmations" DISABLED, the session will be returned immediately.
-              // If ENABLED, session will be null and user needs to check email.
               if (data?.session) {
-                  // User is already logged in, component will re-render automatically. No message needed.
+                  // User is already logged in
               } else if (data?.user) {
                   // Session is null but user created -> Email confirmation is ON.
                   setMessage({ type: 'success', text: `Аккаунт создан! Пожалуйста, подтвердите почту для входа.` });
@@ -69,6 +68,8 @@ const ProfilePage: React.FC = () => {
           // --- CUSTOM ERROR TRANSLATION ---
           if (msg.includes('User already registered') || msg.includes('already registered')) {
               msg = 'Пользователь с таким Email уже зарегистрирован. Пожалуйста, войдите.';
+          } else if (msg.includes('Email not confirmed') || msg.includes('not confirmed')) {
+              msg = 'Почта не подтверждена. Проверьте входящие письма.';
           } else if (msg.includes('Password should be')) {
               msg = 'Пароль должен содержать минимум 6 символов.';
           } else if (msg.includes('rate limit')) {

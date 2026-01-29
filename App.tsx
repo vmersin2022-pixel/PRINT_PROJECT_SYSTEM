@@ -9,17 +9,38 @@ import ServicePage from './pages/service';
 import AboutPage from './pages/about';
 import Checkout from './pages/checkout';
 import WishlistPage from './pages/wishlist';
-import ProfilePage from './pages/profile'; // NEW Import
+import ProfilePage from './pages/profile'; 
 import Header from './components/layout/Header';
 import Menu from './components/layout/Menu';
 import Cart from './components/layout/Cart';
 import Footer from './components/layout/Footer';
 import CustomCursor from './components/ui/CustomCursor';
+import { Loader2 } from 'lucide-react';
+
+// New Component to handle the Auth Redirects vs 404s
+const AuthRedirectHandler = () => {
+  const location = useLocation();
+  // HashRouter treats "#access_token=..." as the pathname "/access_token=..."
+  // We check if the current "path" looks like a Supabase token
+  const isAuthCallback = location.pathname.includes('access_token') || 
+                         location.pathname.includes('type=recovery') ||
+                         location.pathname.includes('error_description');
+
+  if (isAuthCallback) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 font-jura">
+          <Loader2 className="animate-spin mb-4 text-blue-600" size={32} />
+          <h2 className="text-xl font-bold uppercase">Авторизация...</h2>
+          <p className="font-mono text-xs text-zinc-400 mt-2">SYSTEM_HANDSHAKE_INIT</p>
+        </div>
+      );
+  }
+
+  // If it's just a random wrong URL, go to Home
+  return <Navigate to="/" replace />;
+};
 
 const App: React.FC = () => {
-  const location = useLocation();
-  const isHome = location.pathname === '/';
-
   // Text for vertical marquees
   const leftText = "SYSTEM_ONLINE // V.2.04 // SECURE_CONNECTION // TRACKING_OFF // ";
   const rightText = "SCROLL_Y // INTERFACE_READY // NEXUS_SHELL // URBAN_GEAR // ";
@@ -65,8 +86,9 @@ const App: React.FC = () => {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/service" element={<ServicePage />} />
           <Route path="/service/:slug" element={<ServicePage />} />
-          {/* CATCH-ALL: Redirects garbage URLs (like auth tokens) to Home */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          
+          {/* Modified Catch-All to support Auth Tokens */}
+          <Route path="*" element={<AuthRedirectHandler />} />
         </Routes>
       </main>
 
