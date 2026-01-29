@@ -171,13 +171,19 @@ const ProfilePage: React.FC = () => {
                         {/* TELEGRAM LOGIN */}
                         {/* ВАЖНО: Замените 'print_project_bot' на имя вашего бота (без @) */}
                         {/* Если кнопка "Wait..." не исчезает, значит домен не добавлен в BotFather */}
-                        <div className="flex justify-center w-full">
-                            <TelegramWidget 
-                                botName="print_project_shop_bot" 
-                                onAuth={handleTelegramAuth} 
-                                usePic={false} // Cleaner look without avatar
-                                cornerRadius={0} // Sharp corners to match theme
-                            />
+                        <div className="flex flex-col items-center w-full">
+                            <div className="flex justify-center w-full">
+                                <TelegramWidget 
+                                    botName="print_project_shop_bot" 
+                                    onAuth={handleTelegramAuth} 
+                                    usePic={false} // Cleaner look without avatar
+                                    cornerRadius={0} // Sharp corners to match theme
+                                />
+                            </div>
+                            <p className="text-[10px] text-zinc-500 mt-3 font-mono text-center max-w-xs leading-tight bg-zinc-100 p-2 border border-zinc-200">
+                                <span className="text-blue-600 font-bold block mb-1">! ВНИМАНИЕ !</span> 
+                                КОД ПОДТВЕРЖДЕНИЯ ПРИДЕТ В ПРИЛОЖЕНИЕ TELEGRAM (ЧАТ "СЛУЖЕБНЫЕ УВЕДОМЛЕНИЯ"), А НЕ В СМС.
+                            </p>
                         </div>
                     </div>
 
