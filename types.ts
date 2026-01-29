@@ -66,6 +66,14 @@ export interface PromoCode {
   is_active: boolean;
 }
 
+// NEW: User Profile from public table
+export interface UserProfile {
+  id: string;
+  email: string;
+  role: string;
+  created_at: string;
+}
+
 export interface AppContextType {
   products: Product[];
   collections: Collection[];
@@ -74,6 +82,9 @@ export interface AppContextType {
   userOrders: Order[]; // Current user's orders
   promocodes: PromoCode[];
   activePromo: PromoCode | null;
+  
+  allUsers: UserProfile[]; // NEW: List of all registered users for Admin
+
   wishlist: string[];
   user: User | null; // Supabase User
   

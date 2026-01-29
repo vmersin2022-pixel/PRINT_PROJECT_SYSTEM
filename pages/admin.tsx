@@ -3,11 +3,11 @@ import { useApp } from '../context';
 import { Product, Category, Collection, Order, PromoCode } from '../types';
 import FancyButton from '../components/ui/FancyButton';
 import { supabase } from '../supabaseClient';
-import { Trash2, Edit2, Eye, EyeOff, Plus, LogOut, Package, Upload, Database, AlertTriangle, X, Lock, Loader2, Layers, CheckSquare, Square, Shirt, Ruler, ShoppingCart, Tag, RefreshCcw } from 'lucide-react';
+import { Trash2, Edit2, Eye, Plus, LogOut, Package, Upload, Layers, ShoppingCart, Tag, RefreshCcw, Users, CheckSquare, Square, Ruler, Loader2 } from 'lucide-react';
 
 const Admin: React.FC = () => {
   const { 
-      products, collections, orders, promocodes,
+      products, collections, orders, promocodes, allUsers,
       addProduct, updateProduct, deleteProduct, 
       addCollection, deleteCollection,
       updateOrderStatus,
@@ -20,7 +20,7 @@ const Admin: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const [activeTab, setActiveTab] = useState<'products' | 'collections' | 'orders' | 'promocodes'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'collections' | 'orders' | 'promocodes' | 'users'>('products');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -259,7 +259,13 @@ const Admin: React.FC = () => {
             </div>
             <h1 className="font-jura text-4xl font-bold uppercase">Админ Панель</h1>
             <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
-                {[{ id: 'products', label: 'ТОВАРЫ', icon: Package }, { id: 'collections', label: 'КОЛЛЕКЦИИ', icon: Layers }, { id: 'orders', label: 'ЗАКАЗЫ', icon: ShoppingCart }, { id: 'promocodes', label: 'ПРОМОКОДЫ', icon: Tag }].map(tab => (
+                {[
+                    { id: 'products', label: 'ТОВАРЫ', icon: Package }, 
+                    { id: 'collections', label: 'КОЛЛЕКЦИИ', icon: Layers }, 
+                    { id: 'orders', label: 'ЗАКАЗЫ', icon: ShoppingCart }, 
+                    { id: 'promocodes', label: 'ПРОМОКОДЫ', icon: Tag },
+                    { id: 'users', label: 'ПОЛЬЗОВАТЕЛИ', icon: Users } // NEW TAB
+                ].map(tab => (
                     <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center gap-2 font-mono text-sm px-4 py-2 border border-black transition-colors whitespace-nowrap ${activeTab === tab.id ? 'bg-black text-white' : 'bg-white text-black hover:bg-zinc-100'}`}>
                         <tab.icon size={14} /> {tab.label}
                     </button>
@@ -407,7 +413,7 @@ const Admin: React.FC = () => {
             </div>
         )}
 
-        {/* ... (Other tabs remain the same) ... */}
+        {/* ... (Collections tab) ... */}
         {activeTab === 'collections' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-1">
@@ -430,6 +436,8 @@ const Admin: React.FC = () => {
                 </div>
             </div>
         )}
+        
+        {/* ... (Orders tab) ... */}
         {activeTab === 'orders' && (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
@@ -504,6 +512,8 @@ const Admin: React.FC = () => {
                 </div>
             </div>
         )}
+
+        {/* ... (Promocodes tab) ... */}
         {activeTab === 'promocodes' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
                 <div>
@@ -533,6 +543,61 @@ const Admin: React.FC = () => {
                         ))}
                     </div>
                 </div>
+            </div>
+        )}
+
+        {/* --- USERS TAB (NEW) --- */}
+        {activeTab === 'users' && (
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <h2 className="font-jura text-xl font-bold uppercase flex gap-2"><Users size={18} /> ПОЛЬЗОВАТЕЛИ ({allUsers.length})</h2>
+                    <button onClick={() => window.location.reload()} className="p-2 border hover:bg-zinc-100"><RefreshCcw size={16}/></button>
+                </div>
+                
+                {allUsers.length === 0 ? (
+                    <div className="p-8 border border-zinc-300 bg-zinc-50 text-center">
+                        <p className="font-mono text-zinc-500 text-sm">
+                            НЕТ ДАННЫХ ИЛИ ОТСУТСТВУЕТ ТАБЛИЦА PUBLIC.PROFILES.
+                            <br/>
+                            УБЕДИТЕСЬ, ЧТО ВЫ ЗАПУСТИЛИ SQL СКРИПТ В SUPABASE.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="bg-white border border-black overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-zinc-100 border-b border-black font-mono text-xs uppercase">
+                                        <th className="p-4 border-r">EMAIL</th>
+                                        <th className="p-4 border-r">ROLE</th>
+                                        <th className="p-4 border-r">REGISTERED</th>
+                                        <th className="p-4">USER ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-200">
+                                    {allUsers.map(u => (
+                                        <tr key={u.id} className="hover:bg-blue-50/20 text-sm">
+                                            <td className="p-4 border-r font-bold">{u.email}</td>
+                                            <td className="p-4 border-r">
+                                                <span className={`px-2 py-1 text-[10px] font-mono rounded ${u.role === 'admin' ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-600 border'}`}>
+                                                    {u.role.toUpperCase()}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 border-r font-mono text-xs text-zinc-500">
+                                                {new Date(u.created_at).toLocaleDateString()}
+                                                <br/>
+                                                {new Date(u.created_at).toLocaleTimeString().slice(0,5)}
+                                            </td>
+                                            <td className="p-4 font-mono text-[10px] text-zinc-400">
+                                                {u.id}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </div>
         )}
 

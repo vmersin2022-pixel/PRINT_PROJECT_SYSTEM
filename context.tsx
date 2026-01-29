@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Product, CartItem, AppContextType, Category, Collection, Order, PromoCode, ProductVariant } from './types';
+import { Product, CartItem, AppContextType, Category, Collection, Order, PromoCode, ProductVariant, UserProfile } from './types';
 import { supabase } from './supabaseClient';
 import { User } from '@supabase/supabase-js';
 
@@ -21,6 +21,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const [userOrders, setUserOrders] = useState<Order[]>([]); // Personal Cabinet View
   const [promocodes, setPromocodes] = useState<PromoCode[]>([]);
   const [activePromo, setActivePromo] = useState<PromoCode | null>(null);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]); // Admin Users List
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -99,7 +100,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           setOrders([]);
       }
 
-      // 5. Fetch User Orders (Personal Cabinet)
+      // 5. Fetch All Users (Admin View - requires public.profiles table)
+      const { data: userData, error: userError } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      if (!userError && userData) {
+          setAllUsers(userData as UserProfile[]);
+      } else {
+          setAllUsers([]); // Fail silently if table doesn't exist yet
+      }
+
+      // 6. Fetch User Orders (Personal Cabinet)
       // We look up orders where customer_info->>email matches current user email
       const currentUser = (await supabase.auth.getSession()).data.session?.user;
       if (currentUser && currentUser.email) {
@@ -138,7 +147,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         }
       }
 
-      // Refresh data when auth state changes (to load userOrders)
+      // Refresh data when auth state changes (to load userOrders and admin data)
       await refreshData();
     });
 
@@ -401,6 +410,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       userOrders,
       promocodes,
       activePromo,
+      allUsers,
       wishlist,
       user,
       isMenuOpen,

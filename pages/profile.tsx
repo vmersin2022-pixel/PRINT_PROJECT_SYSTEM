@@ -40,7 +40,12 @@ const ProfilePage: React.FC = () => {
           else if (authMode === 'login') {
               if (!password) { setMessage({type: 'error', text: 'Введите пароль'}); setLoading(false); return; }
               const { error } = await loginWithPassword(email, password);
-              if (error) throw error;
+              if (error) {
+                 if (error.message.includes('Invalid login credentials')) {
+                     throw new Error('Неверный Email или пароль');
+                 }
+                 throw error;
+              }
               // Success handled by global state
           } 
           else if (authMode === 'register') {
@@ -59,7 +64,20 @@ const ProfilePage: React.FC = () => {
               }
           }
       } catch (error: any) {
-          setMessage({ type: 'error', text: error.message || 'Ошибка авторизации' });
+          let msg = error.message || 'Ошибка авторизации';
+          
+          // --- CUSTOM ERROR TRANSLATION ---
+          if (msg.includes('User already registered') || msg.includes('already registered')) {
+              msg = 'Пользователь с таким Email уже зарегистрирован. Пожалуйста, войдите.';
+          } else if (msg.includes('Password should be')) {
+              msg = 'Пароль должен содержать минимум 6 символов.';
+          } else if (msg.includes('rate limit')) {
+              msg = 'Слишком много попыток. Подождите немного.';
+          } else if (msg.includes('security purposes')) {
+              msg = 'В целях безопасности подождите перед повторной попыткой.';
+          }
+          
+          setMessage({ type: 'error', text: msg });
       } finally {
           setLoading(false);
       }
