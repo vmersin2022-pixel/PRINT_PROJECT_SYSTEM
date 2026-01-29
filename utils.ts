@@ -4,7 +4,7 @@
  * 
  * @param url - The original image URL
  * @param width - Target width in pixels
- * @param quality - JPEG compression quality (default 80)
+ * @param quality - JPEG/WebP compression quality (default 80)
  * @returns The optimized URL with query parameters
  */
 export const getImageUrl = (url: string | undefined, width: number, quality: number = 80): string => {
@@ -20,7 +20,8 @@ export const getImageUrl = (url: string | undefined, width: number, quality: num
 
   // Append Supabase Image Transformation parameters
   // mode=cover ensures the image fills the dimensions (cropping if necessary)
-  return `${url}?width=${width}&quality=${quality}&resize=cover`;
+  // format=webp ensures modern compression (much smaller than png)
+  return `${url}?width=${width}&quality=${quality}&resize=cover&format=webp`;
 };
 
 /**

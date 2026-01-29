@@ -1,15 +1,20 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
+
+// Keep Home static for fast LCP (Largest Contentful Paint)
 import Home from './pages/index';
-import Catalog from './pages/catalog';
-import ProductDetail from './pages/product';
-import Admin from './pages/admin';
-import CollectionsPage from './pages/collections';
-import ServicePage from './pages/service';
-import AboutPage from './pages/about';
-import Checkout from './pages/checkout';
-import WishlistPage from './pages/wishlist';
-import ProfilePage from './pages/profile'; 
+
+// Lazy load other pages to split the bundle
+const Catalog = lazy(() => import('./pages/catalog'));
+const ProductDetail = lazy(() => import('./pages/product'));
+const Admin = lazy(() => import('./pages/admin'));
+const CollectionsPage = lazy(() => import('./pages/collections'));
+const ServicePage = lazy(() => import('./pages/service'));
+const AboutPage = lazy(() => import('./pages/about'));
+const Checkout = lazy(() => import('./pages/checkout'));
+const WishlistPage = lazy(() => import('./pages/wishlist'));
+const ProfilePage = lazy(() => import('./pages/profile'));
+
 import Header from './components/layout/Header';
 import Menu from './components/layout/Menu';
 import Cart from './components/layout/Cart';
@@ -18,10 +23,18 @@ import CustomCursor from './components/ui/CustomCursor';
 import { Loader2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
+// Loading Fallback Component
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center bg-zinc-50">
+    <Loader2 className="animate-spin text-blue-600" size={40} />
+  </div>
+);
+
 // New Component to handle the Auth Redirects vs 404s
 const AuthRedirectHandler = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [shouldRedirectHome, setShouldRedirectHome] = useState(false);
 
   // HashRouter treats "#access_token=..." as the pathname "/access_token=..."
   // We check if the current "path" looks like a Supabase token or error
@@ -32,10 +45,16 @@ const AuthRedirectHandler = () => {
 
   useEffect(() => {
     if (isAuthCallback) {
+      
+      // TIMEOUT GUARD: If Supabase doesn't resolve in 6 seconds, just go to profile/home
+      const timeoutId = setTimeout(() => {
+          setShouldRedirectHome(true);
+      }, 6000);
+
       // Check if session is already established
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
-           // User is logged in, clear the ugly URL and go to profile
+           clearTimeout(timeoutId);
            navigate('/profile', { replace: true });
         }
       });
@@ -43,15 +62,21 @@ const AuthRedirectHandler = () => {
       // Also listen for the event in case it happens *after* this component mounts
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session) {
+           clearTimeout(timeoutId);
            navigate('/profile', { replace: true });
         }
       });
 
       return () => {
         subscription.unsubscribe();
+        clearTimeout(timeoutId);
       }
     }
   }, [isAuthCallback, navigate]);
+
+  if (shouldRedirectHome) {
+      return <Navigate to="/profile" replace />;
+  }
 
   if (isAuthCallback) {
       return (
@@ -106,22 +131,24 @@ const App: React.FC = () => {
       
       {/* Main Content with padding for side marquees */}
       <main className="lg:px-8 transition-all duration-300">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/collections" element={<CollectionsPage />} />
-          <Route path="/catalog" element={<Catalog />} />
-          <Route path="/product/:id" element={<ProductDetail />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/wishlist" element={<WishlistPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/service" element={<ServicePage />} />
-          <Route path="/service/:slug" element={<ServicePage />} />
-          
-          {/* Modified Catch-All to support Auth Tokens */}
-          <Route path="*" element={<AuthRedirectHandler />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/collections" element={<CollectionsPage />} />
+            <Route path="/catalog" element={<Catalog />} />
+            <Route path="/product/:id" element={<ProductDetail />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/wishlist" element={<WishlistPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/service" element={<ServicePage />} />
+            <Route path="/service/:slug" element={<ServicePage />} />
+            
+            {/* Modified Catch-All to support Auth Tokens */}
+            <Route path="*" element={<AuthRedirectHandler />} />
+          </Routes>
+        </Suspense>
       </main>
 
       <Footer />

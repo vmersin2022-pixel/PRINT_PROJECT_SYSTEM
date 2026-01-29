@@ -17,6 +17,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  const [isSessionLoading, setIsSessionLoading] = useState(true); // START AS TRUE
   
   // New State
   const [orders, setOrders] = useState<Order[]>([]); // Admin View
@@ -55,93 +56,126 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       return [];
   };
 
-  // CENTRAL DATA FETCHING FUNCTION
-  const refreshData = async () => {
-      // 1. Fetch Products
-      const { data: prodData, error: prodError } = await supabase.from('products').select('*');
-      // 1.1 Fetch Variants
-      const { data: varData, error: varError } = await supabase.from('product_variants').select('*');
+  // --- 1. FETCH PUBLIC DATA (PRODUCTS, COLLECTIONS) ---
+  // Only runs once on mount, or when explicitly requested (e.g. admin updates)
+  const fetchPublicData = async () => {
+      const productPromise = supabase.from('products').select('*');
+      const variantPromise = supabase.from('product_variants').select('*');
+      const collectionPromise = supabase.from('collections').select('*');
+      const promoPromise = supabase.from('promocodes').select('*');
 
-      if (prodError) {
-          console.error("Supabase Product Error:", prodError.message);
-      } else if (prodData) {
-        const typedProducts = prodData.map((p: any) => {
-            const productVariants = varData ? varData.filter((v: any) => v.product_id === p.id) : [];
-            return {
-                ...p,
-                categories: parseCategories(p.categories || p.category),
-                collectionIds: parseCollectionIds(p.collectionIds),
-                variants: productVariants
-            };
-        });
-        setProducts(typedProducts as Product[]);
+      const [prodRes, varRes, colRes, promoRes] = await Promise.all([
+          productPromise, variantPromise, collectionPromise, promoPromise
+      ]);
+
+      if (prodRes.error) {
+          console.error("Supabase Product Error:", prodRes.error.message);
+      } else if (prodRes.data) {
+          const varData = varRes.data || [];
+          const typedProducts = prodRes.data.map((p: any) => {
+              const productVariants = varData.filter((v: any) => v.product_id === p.id);
+              return {
+                  ...p,
+                  categories: parseCategories(p.categories || p.category),
+                  collectionIds: parseCollectionIds(p.collectionIds),
+                  variants: productVariants
+              };
+          });
+          setProducts(typedProducts as Product[]);
       }
 
-      // 2. Fetch Collections
-      const { data: colData, error: colError } = await supabase.from('collections').select('*');
-      if (colError) {
-          console.error("Supabase Collection Error:", colError.message);
-      } else if (colData) {
-        const typedCollections = colData.map((c: any) => ({
-            ...c,
-            // Use existing link or fallback to ID-based filter
-            link: c.link || `/catalog?collection=${c.id}`
-        }));
-        setCollections(typedCollections as Collection[]);
+      if (colRes.data) {
+          const typedCollections = colRes.data.map((c: any) => ({
+              ...c,
+              link: c.link || `/catalog?collection=${c.id}`
+          }));
+          setCollections(typedCollections as Collection[]);
       }
 
-      // 3. Fetch Promocodes
-      const { data: promoData } = await supabase.from('promocodes').select('*');
-      if (promoData) setPromocodes(promoData as PromoCode[]);
+      if (promoRes.data) setPromocodes(promoRes.data as PromoCode[]);
+  };
 
-      // 4. Fetch Orders (Admin View - RLS protected, usually returns empty for normal users)
-      const { data: orderData } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-      if (orderData) {
-          setOrders(orderData as Order[]);
-      } else {
-          setOrders([]);
+  // --- 2. FETCH USER PRIVATE DATA ---
+  // Runs when user logs in
+  const fetchUserData = async (currentUser: User) => {
+      // 1. Fetch User's personal orders
+      const { data: personalOrders } = await supabase
+          .from('orders')
+          .select('*')
+          .filter('customer_info->>email', 'eq', currentUser.email)
+          .order('created_at', { ascending: false });
+      
+      if (personalOrders) {
+          setUserOrders(personalOrders as Order[]);
       }
 
-      // 5. Fetch All Users (Admin View - requires public.profiles table)
-      const { data: userData, error: userError } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-      if (!userError && userData) {
-          setAllUsers(userData as UserProfile[]);
-      } else {
-          setAllUsers([]); // Fail silently if table doesn't exist yet
-      }
-
-      // 6. Fetch User Orders (Personal Cabinet)
-      // We look up orders where customer_info->>email matches current user email
-      const currentUser = (await supabase.auth.getSession()).data.session?.user;
-      if (currentUser && currentUser.email) {
-          const { data: personalOrders } = await supabase
-            .from('orders')
-            .select('*')
-            .filter('customer_info->>email', 'eq', currentUser.email) // JSONB Filtering
-            .order('created_at', { ascending: false });
+      // 2. Fetch Admin Data (Try to fetch all orders)
+      const { data: allOrders, error: orderError } = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+      
+      if (!orderError && allOrders) {
+          setOrders(allOrders as Order[]);
           
-          if (personalOrders) {
-              setUserOrders(personalOrders as Order[]);
-          }
-      } else {
-          setUserOrders([]);
+          // If successful (Admin), try fetching users
+          const { data: userData } = await supabase
+              .from('profiles')
+              .select('*')
+              .order('created_at', { ascending: false });
+          if (userData) setAllUsers(userData as UserProfile[]);
       }
   };
 
-  // Auth & Initial Load
-  useEffect(() => {
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      refreshData();
-    });
+  const clearUserData = () => {
+      setUserOrders([]);
+      setOrders([]);
+      setAllUsers([]);
+  }
 
-    // Listen for auth changes
+  // Wrapper for manual refresh from Admin panel
+  const refreshData = async () => {
+      await fetchPublicData();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+          await fetchUserData(session.user);
+      }
+  };
+
+  // --- INITIALIZATION EFFECT ---
+  useEffect(() => {
+    const init = async () => {
+        // 1. Start fetching public data immediately (don't wait for auth)
+        const publicDataPromise = fetchPublicData();
+        
+        // 2. Check Auth
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+            setUser(session.user);
+            // Fetch user data in parallel with public data if possible
+            await fetchUserData(session.user);
+        }
+        
+        // Wait for public data to finish before 'ready' (optional, but good for UI consistency)
+        await publicDataPromise;
+        
+        setIsSessionLoading(false); // READY
+    };
+
+    init();
+
+    // 3. Auth Listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user ?? null);
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
       
-      // Refresh data when auth state changes (to load userOrders and admin data)
-      await refreshData();
+      if (currentUser) {
+          await fetchUserData(currentUser);
+      } else {
+          clearUserData();
+      }
+      setIsSessionLoading(false);
     });
 
     // Load Wishlist
@@ -149,9 +183,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     if (savedWishlist) {
         try {
             setWishlist(JSON.parse(savedWishlist));
-        } catch (e) {
-            console.error("Failed to parse wishlist");
-        }
+        } catch (e) { console.error("Failed to parse wishlist"); }
     }
 
     return () => subscription.unsubscribe();
@@ -213,7 +245,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const logout = async () => {
       // 1. Immediate UI update
       setUser(null);
-      setUserOrders([]);
+      clearUserData();
       
       // 2. Perform Supabase SignOut
       try {
@@ -269,7 +301,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             }));
             await supabase.from('product_variants').insert(variantsPayload);
         }
-        await refreshData();
+        await fetchPublicData(); // Only refresh public data
     }
   };
 
@@ -294,24 +326,24 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         }
     }
     
-    if (!error) await refreshData();
+    if (!error) await fetchPublicData();
   };
 
   const deleteProduct = async (id: string) => {
     const { error } = await supabase.from('products').delete().eq('id', id);
-    if (!error) await refreshData();
+    if (!error) await fetchPublicData();
   };
 
   // --- COLLECTIONS CRUD ---
   const addCollection = async (collection: Collection) => {
     const newCollection = { ...collection, link: collection.link || `/catalog?collection=${collection.id}` };
     const { error } = await supabase.from('collections').upsert([newCollection]);
-    if (!error) await refreshData();
+    if (!error) await fetchPublicData();
   };
 
   const deleteCollection = async (id: string) => {
     const { error } = await supabase.from('collections').delete().eq('id', id);
-    if (!error) await refreshData();
+    if (!error) await fetchPublicData();
   };
 
   // --- CART ---
@@ -360,13 +392,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           alert("ОШИБКА СОЗДАНИЯ ЗАКАЗА: " + error.message);
           return false;
       }
-      await refreshData();
+      if (user) await fetchUserData(user); // Refresh only user data
       return true;
   };
 
   const updateOrderStatus = async (id: string, status: Order['status']) => {
       const { error } = await supabase.from('orders').update({ status }).eq('id', id);
-      if (!error) await refreshData();
+      if (!error && user) await fetchUserData(user);
   };
 
   // --- PROMOCODES LOGIC ---
@@ -394,17 +426,17 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
   const addPromoCodeDb = async (code: string, percent: number) => {
       await supabase.from('promocodes').insert([{ code: code.toUpperCase(), discount_percent: percent, is_active: true }]);
-      await refreshData();
+      await fetchPublicData();
   };
 
   const togglePromoCodeDb = async (id: string, currentState: boolean) => {
       await supabase.from('promocodes').update({ is_active: !currentState }).eq('id', id);
-      await refreshData();
+      await fetchPublicData();
   };
 
   const deletePromoCodeDb = async (id: string) => {
       await supabase.from('promocodes').delete().eq('id', id);
-      await refreshData();
+      await fetchPublicData();
   };
 
 
@@ -420,6 +452,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       allUsers,
       wishlist,
       user,
+      isSessionLoading, // EXPORTED
       isMenuOpen,
       isCartOpen,
       toggleMenu,

@@ -5,7 +5,7 @@ import { LogOut, Package, Mail, Loader2, Clock, CheckCircle, Lock, ArrowRight, Z
 import { Order } from '../types';
 
 const ProfilePage: React.FC = () => {
-  const { user, userOrders, loginWithMagicLink, loginWithPassword, signupWithPassword, loginWithGoogle, logout } = useApp();
+  const { user, isSessionLoading, userOrders, loginWithMagicLink, loginWithPassword, signupWithPassword, loginWithGoogle, logout } = useApp();
   
   // Auth Modes: 'login', 'register', 'magic'
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'magic'>('login');
@@ -109,7 +109,17 @@ const ProfilePage: React.FC = () => {
       );
   };
 
-  // --- GUEST VIEW (LOGIN/REGISTER) ---
+  // --- 0. CHECKING SESSION LOADING ---
+  if (isSessionLoading) {
+      return (
+          <div className="min-h-screen pt-24 pb-12 bg-white flex flex-col items-center justify-center">
+              <Loader2 className="animate-spin text-blue-600 mb-4" size={32} />
+              <p className="font-mono text-xs text-zinc-400 uppercase">ПРОВЕРКА ДОСТУПА...</p>
+          </div>
+      );
+  }
+
+  // --- 1. GUEST VIEW (LOGIN/REGISTER) ---
   if (!user) {
       return (
         <div className="min-h-screen pt-24 pb-12 bg-white flex flex-col items-center justify-center">
@@ -231,7 +241,7 @@ const ProfilePage: React.FC = () => {
       );
   }
 
-  // --- USER VIEW (PROFILE) ---
+  // --- 2. USER VIEW (PROFILE) ---
   return (
     <div className="min-h-screen pt-24 pb-12 bg-white">
       <div className="container mx-auto px-4 max-w-4xl">

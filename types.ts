@@ -87,6 +87,7 @@ export interface AppContextType {
 
   wishlist: string[];
   user: User | null; // Supabase User
+  isSessionLoading: boolean; // NEW: Track if we are checking session
   
   isMenuOpen: boolean;
   isCartOpen: boolean;
