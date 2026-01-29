@@ -32,7 +32,12 @@ const Catalog: React.FC = () => {
     if (colParam) {
         // If single collection in URL, select it
         const found = collections.find(c => c.link.includes(colParam) || c.id === colParam);
-        if(found) setSelectedCollections([found.id]);
+        // Special handling for 'duo' if it's not yet in the DB but linked from menu
+        if(found) {
+            setSelectedCollections([found.id]);
+        } else if (colParam === 'duo') {
+            setSelectedCollections(['duo']);
+        }
     }
     if (filterParam === 'new') {
         setIsNewFilter(true);
@@ -88,14 +93,34 @@ const Catalog: React.FC = () => {
   };
 
   // --- Dynamic Header Title Logic ---
-  let pageTitle = "КАТАЛОГ";
+  let pageTitle = "ВСЕ ТОВАРЫ"; // Default when no filters active
   
-  // If exactly one collection is selected, use its title
-  if (selectedCollections.length === 1) {
-      const col = collections.find(c => c.id === selectedCollections[0]);
-      if (col) {
-          pageTitle = col.title;
+  // 1. Check for Fresh Drop (Category or Filter)
+  if (selectedCategories.includes('fresh_drop') || isNewFilter) {
+      pageTitle = "СВЕЖИЙ ДРОП";
+  }
+  // 2. Check for Last Drop
+  else if (selectedCategories.includes('last_drop')) {
+      pageTitle = "ЗАВЕРШАЕМ ДРОП";
+  }
+  // 3. Check for Collections
+  else if (selectedCollections.length > 0) {
+      if (selectedCollections.includes('duo')) {
+          pageTitle = "А ЭТО ДЛЯ ДВОИХ";
+      } else if (selectedCollections.length === 1) {
+          const col = collections.find(c => c.id === selectedCollections[0]);
+          if (col) pageTitle = col.title;
+      } else {
+          pageTitle = "ВЫБРАННЫЕ КОЛЛЕКЦИИ";
       }
+  }
+  // 4. Check for Standard Categories
+  else if (selectedCategories.length === 1) {
+      pageTitle = CATEGORY_LABELS[selectedCategories[0]];
+  }
+  // 5. Multiple categories
+  else if (selectedCategories.length > 1) {
+      pageTitle = "ВЫБОРКА";
   }
 
   return (
@@ -138,6 +163,7 @@ const Catalog: React.FC = () => {
                                     <span key={c} className="text-[10px] bg-black text-white px-2 py-1 font-mono uppercase">{CATEGORY_LABELS[c]}</span>
                                 ))}
                                 {selectedCollections.map(id => {
+                                    if (id === 'duo') return <span key={id} className="text-[10px] bg-zinc-500 text-white px-2 py-1 font-mono uppercase">ДЛЯ ДВОИХ</span>;
                                     const col = collections.find(c => c.id === id);
                                     return col ? <span key={id} className="text-[10px] bg-zinc-500 text-white px-2 py-1 font-mono uppercase">{col.title}</span> : null;
                                 })}

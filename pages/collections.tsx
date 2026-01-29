@@ -18,14 +18,17 @@ const CollectionsPage: React.FC = () => {
         {/* Header */}
         <div className="mb-12 border-b border-black pb-6">
             <div className="flex items-center gap-2 mb-2 font-mono text-xs text-zinc-400">
-                <span onClick={() => navigate('/')} className="cursor-pointer hover:text-black">HOME</span> / 
-                <span className="text-black font-bold">COLLECTIONS</span>
+                <span onClick={() => navigate('/')} className="cursor-pointer hover:text-black">ГЛАВНАЯ</span> / 
+                <span className="text-black font-bold">КОЛЛЕКЦИИ</span>
             </div>
             <h1 className="font-jura text-5xl md:text-7xl font-bold uppercase tracking-tight">
-                ARCHIVE &<br /> DROPS
+                ТВОИ СОСТОЯНИЯ & <br /> СЕРИИ
             </h1>
             <p className="mt-4 font-montserrat text-sm md:text-base text-zinc-600 max-w-2xl">
-                Курированные подборки принтов. Каждая коллекция — это отдельная история, настроение и визуальный код. Выберите свой вайб.
+                Состояния — про настроение. <br />
+                Подборки — про персонажей, мемы и культурные коды. <br />
+                Выбирай то, что совпадает с тобой сейчас. <br />
+                Выбирай свой вайб.
             </p>
         </div>
 
