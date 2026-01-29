@@ -30,6 +30,8 @@ const ProfilePage: React.FC = () => {
       if (!email) return;
       setMessage(null);
       setLoading(true);
+      
+      let successRedirect = false;
 
       try {
           if (authMode === 'magic') {
@@ -62,7 +64,9 @@ const ProfilePage: React.FC = () => {
               
               // INTELLIGENT REGISTRATION CHECK:
               if (data?.session) {
-                  // User is already logged in
+                  // User is already logged in (Confirm Email is OFF in Supabase)
+                  // We mark this so we don't turn off loading, to prevent form flickering before redirect
+                  successRedirect = true;
               } else if (data?.user) {
                   // Session is null but user created -> Email confirmation is ON.
                   setMessage({ type: 'success', text: `АККАУНТ СОЗДАН! МЫ ОТПРАВИЛИ ССЫЛКУ НА ${email.toUpperCase()}. ПОДТВЕРДИТЕ ЕЁ ДЛЯ ВХОДА.` });
@@ -90,7 +94,9 @@ const ProfilePage: React.FC = () => {
 
           setMessage({ type: 'error', text: msg });
       } finally {
-          setLoading(false);
+          if (!successRedirect) {
+              setLoading(false);
+          }
       }
   };
 

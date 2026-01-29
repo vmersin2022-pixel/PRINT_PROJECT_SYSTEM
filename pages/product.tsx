@@ -253,9 +253,11 @@ const ProductDetail: React.FC = () => {
                         {/* We use a standard list of sizes to ensure order, checking availability for each */}
                         {['S', 'M', 'L', 'XL', '2XL', '3XL'].map((size) => {
                             // Check if this size exists in the product variants
-                            const variantExists = product.variants 
-                                ? product.variants.some(v => v.size === size) 
-                                : product.sizes.includes(size);
+                            // FIX: Check length of variants array. If array exists but empty, fallback to sizes array.
+                            const hasVariants = product.variants && product.variants.length > 0;
+                            const variantExists = hasVariants
+                                ? product.variants!.some(v => v.size === size) 
+                                : product.sizes?.includes(size);
                             
                             if (!variantExists) return null; // Don't show if not configured for this product
 
