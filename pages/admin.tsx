@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context';
 import { Product, Category, Collection, Order, PromoCode } from '../types';
 import FancyButton from '../components/ui/FancyButton';
 import { supabase } from '../supabaseClient';
-import { Trash2, Edit2, Eye, Plus, LogOut, Package, Upload, Layers, ShoppingCart, Tag, RefreshCcw, Users, CheckSquare, Square, Ruler, Loader2 } from 'lucide-react';
+import { Trash2, Edit2, Eye, Plus, LogOut, Package, Upload, Layers, ShoppingCart, Tag, RefreshCcw, Users, CheckSquare, Square, Ruler, Loader2, Send } from 'lucide-react';
 
 const Admin: React.FC = () => {
   const { 
@@ -546,7 +547,7 @@ const Admin: React.FC = () => {
             </div>
         )}
 
-        {/* --- USERS TAB (NEW) --- */}
+        {/* --- USERS TAB (UPDATED) --- */}
         {activeTab === 'users' && (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
@@ -568,27 +569,58 @@ const Admin: React.FC = () => {
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-zinc-100 border-b border-black font-mono text-xs uppercase">
-                                        <th className="p-4 border-r">EMAIL</th>
-                                        <th className="p-4 border-r">ROLE</th>
-                                        <th className="p-4 border-r">REGISTERED</th>
-                                        <th className="p-4">USER ID</th>
+                                        <th className="p-4 border-r w-[25%]">EMAIL</th>
+                                        <th className="p-4 border-r w-[25%]">CONTACT INFO</th>
+                                        <th className="p-4 border-r w-[15%]">ROLE</th>
+                                        <th className="p-4 border-r w-[15%]">REGISTERED</th>
+                                        <th className="p-4 w-[20%]">USER ID</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-zinc-200">
                                     {allUsers.map(u => (
                                         <tr key={u.id} className="hover:bg-blue-50/20 text-sm">
-                                            <td className="p-4 border-r font-bold">{u.email}</td>
-                                            <td className="p-4 border-r">
+                                            {/* Email */}
+                                            <td className="p-4 border-r font-bold align-top">
+                                                {u.email}
+                                            </td>
+                                            
+                                            {/* Contact Info (Telegram / Name) */}
+                                            <td className="p-4 border-r align-top">
+                                                <div className="flex flex-col gap-1">
+                                                    {u.full_name && <span className="font-bold">{u.full_name}</span>}
+                                                    
+                                                    {u.username && (
+                                                        <a href={`https://t.me/${u.username}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-blue-600 hover:underline font-mono text-xs">
+                                                            <Send size={10} /> @{u.username}
+                                                        </a>
+                                                    )}
+                                                    
+                                                    {u.telegram_id && (
+                                                        <span className="text-[10px] text-zinc-400 font-mono">TG_ID: {u.telegram_id}</span>
+                                                    )}
+
+                                                    {!u.full_name && !u.username && !u.telegram_id && (
+                                                        <span className="text-zinc-400 text-xs italic">- нет данных -</span>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* Role */}
+                                            <td className="p-4 border-r align-top">
                                                 <span className={`px-2 py-1 text-[10px] font-mono rounded ${u.role === 'admin' ? 'bg-black text-white' : 'bg-zinc-100 text-zinc-600 border'}`}>
                                                     {u.role.toUpperCase()}
                                                 </span>
                                             </td>
-                                            <td className="p-4 border-r font-mono text-xs text-zinc-500">
+
+                                            {/* Date */}
+                                            <td className="p-4 border-r align-top font-mono text-xs text-zinc-500">
                                                 {new Date(u.created_at).toLocaleDateString()}
                                                 <br/>
                                                 {new Date(u.created_at).toLocaleTimeString().slice(0,5)}
                                             </td>
-                                            <td className="p-4 font-mono text-[10px] text-zinc-400">
+
+                                            {/* ID */}
+                                            <td className="p-4 align-top font-mono text-[10px] text-zinc-400 break-all">
                                                 {u.id}
                                             </td>
                                         </tr>

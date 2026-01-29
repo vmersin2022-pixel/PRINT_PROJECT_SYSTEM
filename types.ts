@@ -66,12 +66,27 @@ export interface PromoCode {
   is_active: boolean;
 }
 
-// NEW: User Profile from public table
+// NEW: User Profile from public table (Expanded)
 export interface UserProfile {
   id: string;
   email: string;
   role: string;
   created_at: string;
+  username?: string;
+  full_name?: string;
+  telegram_id?: number;
+  avatar_url?: string;
+}
+
+// NEW: Telegram Data Structure
+export interface TelegramUser {
+  id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  photo_url?: string;
+  auth_date: number;
+  hash: string;
 }
 
 export interface AppContextType {
@@ -103,6 +118,7 @@ export interface AppContextType {
   loginWithPassword: (email: string, password: string) => Promise<{ error: any }>;
   signupWithPassword: (email: string, password: string) => Promise<{ data: any; error: any }>;
   loginWithGoogle: () => Promise<{ error: any }>;
+  loginWithTelegram: (user: TelegramUser) => Promise<{ error: any }>; // NEW
   logout: () => Promise<void>;
 
   // Products

@@ -1,6 +1,7 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Product, CartItem, AppContextType, Category, Collection, Order, PromoCode, ProductVariant, UserProfile } from './types';
+import { Product, CartItem, AppContextType, Category, Collection, Order, PromoCode, ProductVariant, UserProfile, TelegramUser } from './types';
 import { supabase } from './supabaseClient';
 import { User } from '@supabase/supabase-js';
 
@@ -99,6 +100,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   // Runs when user logs in
   const fetchUserData = async (currentUser: User) => {
       // 1. Fetch User's personal orders
+      // Note: If user logged in via Telegram, their email might be a dummy one.
+      // We check orders by 'customer_info->>email' which is entered at checkout manually.
+      // Or we can check by user_id if we update the order structure later.
+      // For now, we keep matching by email (assuming TG users enter real email at checkout).
       const { data: personalOrders } = await supabase
           .from('orders')
           .select('*')
@@ -240,6 +245,35 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         }
     });
     return { error };
+  };
+
+  // --- NEW: TELEGRAM MANUAL AUTH (OPTION 2) ---
+  const loginWithTelegram = async (telegramUser: TelegramUser) => {
+      try {
+          // 1. Invoke Supabase Edge Function to verify hash and get tokens
+          // Note: You must deploy 'telegram-login' function on Supabase!
+          const { data, error } = await supabase.functions.invoke('telegram-login', {
+              body: telegramUser
+          });
+
+          if (error) {
+              console.error('Edge Function Error:', error);
+              throw new Error('Ошибка соединения с сервером авторизации.');
+          }
+
+          if (!data?.session) {
+              throw new Error('Сервер не вернул сессию. Проверьте конфигурацию.');
+          }
+
+          // 2. Set the session manually in the client
+          const { error: sessionError } = await supabase.auth.setSession(data.session);
+          
+          if (sessionError) throw sessionError;
+
+          return { error: null };
+      } catch (err: any) {
+          return { error: err };
+      }
   };
 
   const logout = async () => {
@@ -478,6 +512,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       loginWithPassword,
       signupWithPassword,
       loginWithGoogle,
+      loginWithTelegram, // EXPORTED
       logout
     }}>
       {children}
