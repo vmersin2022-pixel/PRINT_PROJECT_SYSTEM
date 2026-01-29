@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ShoppingBag, Menu as MenuIcon } from 'lucide-react';
+import { ShoppingBag, Menu as MenuIcon, Heart, User } from 'lucide-react';
 import { useApp } from '../../context';
 
 const Header: React.FC = () => {
-  const { toggleMenu, toggleCart, cart } = useApp();
+  const { toggleMenu, toggleCart, cart, wishlist, user } = useApp();
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
 
@@ -15,6 +15,7 @@ const Header: React.FC = () => {
   }, []);
 
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
+  const wishlistCount = wishlist.length;
 
   // Check if we are on the home page
   const isHome = location.pathname === '/';
@@ -29,41 +30,69 @@ const Header: React.FC = () => {
   const underlineColorClass = isDarkBg ? 'bg-blue-500' : 'bg-blue-600';
 
   return (
-    <header className={`fixed top-0 left-0 w-full z-40 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur border-b border-zinc-200 py-3' : 'bg-transparent py-6'}`}>
+    <header className={`fixed top-0 left-0 w-full z-40 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur border-b border-zinc-200 py-4' : 'bg-transparent py-6'}`}>
       <div className={`container mx-auto px-4 md:px-8 flex justify-between items-center relative transition-colors duration-300 ${textColorClass}`}>
         {/* Left: Menu Trigger */}
         <button onClick={toggleMenu} className="group flex items-center gap-3">
           <MenuIcon className={`w-6 h-6 transition-colors ${hoverColorClass}`} />
           <div className="hidden md:flex flex-col items-start">
-            <span className="font-jura text-xs tracking-widest font-bold group-hover:translate-x-1 transition-transform">
+            <span className="font-jura text-xl tracking-widest font-bold group-hover:translate-x-1 transition-transform">
               КАТАЛОГ
             </span>
           </div>
         </button>
 
         {/* Center: Logo */}
-        <Link to="/" className="absolute left-1/2 -translate-x-1/2 text-center group flex flex-col items-center">
-          <h1 className="font-jura text-2xl md:text-3xl font-bold tracking-[0.2em] group-hover:scale-105 transition-transform uppercase">
+        {/* Added top-1/2 and -translate-y-1/2 for perfect vertical centering */}
+        <Link 
+            to="/" 
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-center group flex flex-col items-center"
+        >
+          <h1 className={`font-jura font-bold tracking-[0.2em] group-hover:scale-105 transition-all duration-300 uppercase ${scrolled ? 'text-xl' : 'text-2xl md:text-3xl'}`}>
             PRINT PROJECT
           </h1>
-          <span className={`text-[10px] font-mono tracking-wider lowercase mt-1 transition-colors ${isDarkBg ? 'text-zinc-400' : 'text-zinc-500'}`}>
-            БРЕНД-КУРАТОР ПРИНТОВ
-          </span>
-          <div className={`h-[2px] w-0 mx-auto group-hover:w-full transition-all duration-500 mt-1 ${underlineColorClass}`} />
+          
+          {/* Collapse subtitle on scroll */}
+          <div className={`overflow-hidden transition-all duration-300 flex flex-col items-center ${scrolled ? 'max-h-0 opacity-0' : 'max-h-8 opacity-100 mt-1'}`}>
+            <span className={`text-[15px] font-mono tracking-wider lowercase whitespace-nowrap transition-colors ${isDarkBg ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                БРЕНД-КУРАТОР ПРИНТОВ
+            </span>
+          </div>
+          
+          <div className={`h-[2px] w-0 mx-auto group-hover:w-full transition-all duration-500 ${scrolled ? 'mt-0' : 'mt-1'} ${underlineColorClass}`} />
         </Link>
 
-        {/* Right: Cart */}
-        <button onClick={toggleCart} className="group flex items-center gap-3 relative">
-          <span className="hidden md:block font-jura text-xs tracking-widest group-hover:-translate-x-1 transition-transform font-bold">
-            КОРЗИНА ({totalItems})
-          </span>
-          <ShoppingBag className={`w-6 h-6 transition-colors ${hoverColorClass}`} />
-          {totalItems > 0 && (
-            <span className="md:hidden absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-mono">
-              {totalItems}
-            </span>
-          )}
-        </button>
+        {/* Right: Actions */}
+        <div className="flex items-center gap-6">
+            
+            {/* Wishlist Link */}
+            <Link to="/wishlist" className="group flex items-center gap-3 relative" title="Избранное">
+                <Heart className={`w-6 h-6 transition-colors ${hoverColorClass}`} />
+                {wishlistCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-mono">
+                    {wishlistCount}
+                    </span>
+                )}
+            </Link>
+
+            {/* Profile Link */}
+            <Link to="/profile" className="group flex items-center gap-3 relative" title="Личный кабинет">
+                <User className={`w-6 h-6 transition-colors ${hoverColorClass} ${user ? 'fill-current' : ''}`} />
+            </Link>
+
+            {/* Cart Trigger */}
+            <button onClick={toggleCart} className="group flex items-center gap-3 relative">
+                <span className="hidden md:block font-jura text-xs tracking-widest group-hover:-translate-x-1 transition-transform font-bold">
+                    КОРЗИНА ({totalItems})
+                </span>
+                <ShoppingBag className={`w-6 h-6 transition-colors ${hoverColorClass}`} />
+                {totalItems > 0 && (
+                    <span className="md:hidden absolute -top-1 -right-1 bg-blue-500 text-white text-[15px] w-4 h-4 flex items-center justify-center rounded-full font-mono">
+                    {totalItems}
+                    </span>
+                )}
+            </button>
+        </div>
       </div>
     </header>
   );

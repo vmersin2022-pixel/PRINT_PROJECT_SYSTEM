@@ -6,7 +6,10 @@ import ProductDetail from './pages/product';
 import Admin from './pages/admin';
 import CollectionsPage from './pages/collections';
 import ServicePage from './pages/service';
-import AboutPage from './pages/about'; // Import About Page
+import AboutPage from './pages/about';
+import Checkout from './pages/checkout';
+import WishlistPage from './pages/wishlist';
+import ProfilePage from './pages/profile'; // NEW Import
 import Header from './components/layout/Header';
 import Menu from './components/layout/Menu';
 import Cart from './components/layout/Cart';
@@ -52,11 +55,14 @@ const App: React.FC = () => {
       <main className="lg:px-8 transition-all duration-300">
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/about" element={<AboutPage />} /> {/* New Route */}
+          <Route path="/about" element={<AboutPage />} />
           <Route path="/collections" element={<CollectionsPage />} />
           <Route path="/catalog" element={<Catalog />} />
           <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/wishlist" element={<WishlistPage />} />
+          <Route path="/profile" element={<ProfilePage />} /> {/* NEW Route */}
           <Route path="/service" element={<ServicePage />} />
           <Route path="/service/:slug" element={<ServicePage />} />
         </Routes>

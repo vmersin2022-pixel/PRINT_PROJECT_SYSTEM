@@ -4,7 +4,7 @@ import { X, ChevronRight } from 'lucide-react';
 import { useApp } from '../../context';
 
 const Menu: React.FC = () => {
-  const { isMenuOpen, toggleMenu } = useApp();
+  const { isMenuOpen, toggleMenu, user } = useApp();
   const location = useLocation();
 
   React.useEffect(() => {
@@ -17,12 +17,9 @@ const Menu: React.FC = () => {
   const links = [
     { name: 'Главная', path: '/' },
     { name: 'Все товары', path: '/catalog' },
-    // Свежий дроп: товары с флагом isNew (или категорией fresh_drop, здесь используем фильтр новинок)
     { name: 'Свежий Drop', path: '/catalog?category=fresh_drop' }, 
     { name: 'Коллекции', path: '/collections' },
-    // Для двоих: ссылка на конкретную коллекцию с ID 'duo'
     { name: 'А это для двоих', path: '/catalog?collection=duo' },
-    // Завершаем дроп: ссылка на категорию last_drop
     { name: 'Завершаем дроп', path: '/catalog?category=last_drop' }, 
   ];
 
@@ -56,6 +53,14 @@ const Menu: React.FC = () => {
               {link.name}
             </Link>
           ))}
+          
+          {/* Profile Link in Menu */}
+          <Link 
+              to="/profile"
+              className="font-jura text-3xl sm:text-4xl uppercase font-bold tracking-wider text-zinc-400 hover:text-black hover:pl-4 transition-all duration-300 flex items-center group mt-4 pt-4 border-t border-zinc-200"
+            >
+              {user ? 'Личный Кабинет' : 'Вход / Профиль'}
+          </Link>
         </nav>
 
         <div className="border-t border-black pt-8">

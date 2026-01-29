@@ -1,6 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Product, Category } from '../../types';
+import { getImageUrl } from '../../utils';
+import { useApp } from '../../context';
+import { Heart } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
@@ -15,8 +18,22 @@ const CATEGORY_LABELS: Record<Category, string> = {
 };
 
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
+  const { wishlist, toggleWishlist } = useApp();
   const [currentIdx, setCurrentIdx] = useState(0);
   const intervalRef = useRef<any>(null);
+
+  const isLiked = wishlist.includes(product.id);
+
+  // Generate a more random/chaotic number based on UUID hash
+  const purchasedCount = useMemo(() => {
+    let hash = 0;
+    for (let i = 0; i < product.id.length; i++) {
+        hash = ((hash << 5) - hash) + product.id.charCodeAt(i);
+        hash |= 0;
+    }
+    // Result range approx 42 to 940
+    return Math.abs(hash % 898) + 42; 
+  }, [product.id]);
 
   const handleMouseEnter = () => {
     if (product.images.length > 1) {
@@ -35,22 +52,33 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     setCurrentIdx(0);
   };
 
+  // Prevent link navigation when clicking heart
+  const handleLike = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleWishlist(product.id);
+  };
+
+  const currentImageSrc = product.images[currentIdx] || product.images[0];
+  const optimizedImageSrc = getImageUrl(currentImageSrc, 500);
+
   return (
     <Link 
       to={`/product/${product.id}`} 
-      className="group block animate-fade-up relative"
+      className="group flex flex-col h-full animate-fade-up relative w-full"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       {/* Glassmorphism Card Container - RAL 5009 SHADOW */}
-      <div className="relative aspect-[3/4] overflow-hidden bg-white/40 backdrop-blur-md border border-white/50 shadow-sm group-hover:shadow-[0_0_25px_rgba(46,89,132,0.3)] group-hover:border-blue-600 transition-all duration-300 mb-4">
+      <div className="relative w-full aspect-[3/4] overflow-hidden bg-white/40 backdrop-blur-md border border-white/50 shadow-sm group-hover:shadow-[0_0_25px_rgba(46,89,132,0.3)] group-hover:border-blue-600 transition-all duration-300 mb-4 shrink-0">
         
         {/* Main Image Display */}
         <div className="w-full h-full p-2">
             <div className="w-full h-full relative overflow-hidden bg-zinc-50/50">
                  <img 
-                    src={product.images[currentIdx] || product.images[0]} 
+                    src={optimizedImageSrc} 
                     alt={product.name}
+                    loading="lazy"
                     className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 scale-95 group-hover:scale-100" 
                  />
                  
@@ -74,8 +102,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </div>
         )}
         
-        {/* Tags Overlay */}
-        <div className="absolute top-0 left-0 flex flex-col gap-1 items-start pointer-events-none p-3 z-20">
+        {/* --- TAGS (Top Left) --- */}
+        <div className="absolute top-3 left-3 flex flex-col gap-1 items-start pointer-events-none z-20">
             {product.isNew && (
                 <span className="bg-blue-600 text-white text-[9px] px-2 py-1 font-bold font-mono tracking-widest border border-blue-500 shadow-[0_0_10px_rgba(46,89,132,0.4)]">
                     NEW_DROP
@@ -86,6 +114,22 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                     LAST_UNIT
                 </span>
             )}
+        </div>
+
+        {/* --- ACTIONS (Top Right) --- */}
+        <div className="absolute top-3 right-3 z-20 flex flex-col items-end gap-2">
+             {/* Purchased Count */}
+             <div className="bg-white/90 backdrop-blur border border-zinc-200 text-black text-[9px] px-2 py-1 font-mono font-bold tracking-tight shadow-sm pointer-events-none">
+                КУПЛЕНО {purchasedCount} РАЗ
+            </div>
+            
+            {/* WISHLIST BUTTON */}
+            <button 
+                onClick={handleLike}
+                className={`w-8 h-8 flex items-center justify-center border transition-all duration-300 shadow-sm ${isLiked ? 'bg-red-600 border-red-600 text-white' : 'bg-white/80 border-zinc-200 text-zinc-400 hover:text-red-500 hover:border-red-500'}`}
+            >
+                <Heart size={16} fill={isLiked ? "currentColor" : "none"} />
+            </button>
         </div>
         
         {/* Bottom Slide-up Overlay */}
@@ -102,7 +146,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       </div>
 
       {/* Info Block */}
-      <div className="flex justify-between items-start px-1">
+      <div className="flex justify-between items-start px-1 mt-auto">
         <div>
           <h3 className="font-jura font-bold text-base uppercase leading-tight group-hover:text-blue-600 transition-colors">
             {product.name}
@@ -111,9 +155,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               {product.categories?.slice(0,2).map(c => CATEGORY_LABELS[c] || c).join(' // ')}
           </p>
         </div>
-        <div className="text-right">
+        <div className="text-right whitespace-nowrap ml-2">
              <span className="font-jura font-bold block">{product.price.toLocaleString('ru-RU')} ₽</span>
-             <span className="text-[9px] font-mono text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+             <span className="text-[9px] font-mono text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity block">
                 IN_STOCK
              </span>
         </div>

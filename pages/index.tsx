@@ -1,20 +1,38 @@
 import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, MoveRight, Layers } from 'lucide-react';
+import { ArrowRight, MoveRight, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
 import FancyButton from '../components/ui/FancyButton';
 import PromoSequence from '../components/ui/PromoSequence';
 import ProductCard from '../components/ui/ProductCard';
 import { useApp } from '../context';
+import { getImageUrl } from '../utils';
 
 const Home: React.FC = () => {
   const { products, collections } = useApp();
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const productsScrollRef = useRef<HTMLDivElement>(null);
+  const collectionsScrollRef = useRef<HTMLDivElement>(null);
   
+  // Get all Fresh Drop products instead of slicing just 3, so we can scroll them
   const freshDrops = products.filter(p => p.categories?.includes('fresh_drop') && !p.isHidden);
-  const otherProducts = products.filter(p => !p.categories?.includes('fresh_drop') && !p.isHidden);
-  const featuredProducts = [...freshDrops.slice(0, 2), ...otherProducts.slice(0, 1)];
+  
+  // If no fresh drops, fallback to some items for display
+  const displayProducts = freshDrops.length > 0 
+    ? freshDrops 
+    : products.filter(p => !p.isHidden).slice(0, 8);
 
   const marqueeText = "МОЖНО БОЛЬШЕ НЕ СКРОЛЛИТЬ МАРКЕТПЛЕЙСЫ // МЫ УЖЕ ОТОБРАЛИ ТРЕНДЫ // ВСЕ АКТУАЛЬНЫЕ ПРИНТЫ ЗДЕСЬ //";
+
+  // Generic scroll handler
+  const scroll = (ref: React.RefObject<HTMLDivElement>, direction: 'left' | 'right') => {
+    if (ref.current) {
+        // Scroll amount increased to match the large card width (400px + gap)
+        const scrollAmount = 450; 
+        ref.current.scrollBy({
+            left: direction === 'right' ? scrollAmount : -scrollAmount,
+            behavior: 'smooth'
+        });
+    }
+  };
   
   return (
     <div className="min-h-screen">
@@ -80,7 +98,7 @@ const Home: React.FC = () => {
         </div>
       </div>
 
-      {/* Featured Grid - REDUCED PADDING */}
+      {/* Featured Grid (Now Scrollable Fresh Drop - UPDATED VISUALS TO MATCH COLLECTIONS) */}
       <section className="pt-12 pb-24 bg-transparent relative overflow-hidden">
         {/* Background Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none" />
@@ -101,30 +119,98 @@ const Home: React.FC = () => {
               </h2>
             </div>
 
-            <Link 
-              to="/catalog?category=fresh_drop" 
-              className="group flex items-center gap-4 pl-6 pr-4 py-3 border-b border-zinc-300 hover:border-blue-600 transition-colors bg-white/30 backdrop-blur-sm"
-            >
-              <div className="text-right">
-                 <span className="block font-jura font-bold text-sm uppercase group-hover:text-blue-600 transition-colors">СМОТРЕТЬ ВСЕ</span>
-              </div>
-              <ArrowRight className="w-5 h-5 text-black group-hover:translate-x-1 group-hover:text-blue-600 transition-all" />
-            </Link>
+            <div className="flex items-center gap-4">
+                 {/* Nav Buttons */}
+                 <div className="flex gap-2">
+                    <button 
+                        onClick={() => scroll(productsScrollRef, 'left')} 
+                        className="p-3 border border-zinc-300 hover:border-black hover:bg-black hover:text-white transition-all"
+                        aria-label="Scroll Left"
+                    >
+                        <ChevronLeft size={20} />
+                    </button>
+                    <button 
+                        onClick={() => scroll(productsScrollRef, 'right')} 
+                        className="p-3 border border-zinc-300 hover:border-black hover:bg-black hover:text-white transition-all"
+                        aria-label="Scroll Right"
+                    >
+                        <ChevronRight size={20} />
+                    </button>
+                </div>
+
+                <Link 
+                to="/catalog?category=fresh_drop" 
+                className="group hidden sm:flex items-center gap-4 pl-6 pr-4 py-3 border-b border-zinc-300 hover:border-blue-600 transition-colors bg-white/30 backdrop-blur-sm"
+                >
+                    <div className="text-right">
+                        <span className="block font-jura font-bold text-sm uppercase group-hover:text-blue-600 transition-colors">СМОТРЕТЬ ВСЕ</span>
+                    </div>
+                    <ArrowRight className="w-5 h-5 text-black group-hover:translate-x-1 group-hover:text-blue-600 transition-all" />
+                </Link>
+            </div>
           </div>
 
           <div className="relative">
              <div className="hidden md:block absolute -top-4 -left-4 w-8 h-8 border-l-2 border-t-2 border-zinc-200" />
              <div className="hidden md:block absolute -top-4 -right-4 w-8 h-8 border-r-2 border-t-2 border-zinc-200" />
 
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {featuredProducts.map((product, idx) => (
-                <div key={product.id} className="relative group/card">
-                   <div className="absolute -top-6 left-0 font-mono text-xs text-zinc-300 group-hover/card:text-blue-600 transition-colors">
-                     0{idx + 1} //
-                   </div>
-                   <ProductCard product={product} />
-                </div>
+             {/* SCROLLABLE CONTAINER FOR PRODUCTS - Updated to match Collections style */}
+             <div 
+                ref={productsScrollRef}
+                className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide scroll-smooth"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+             >
+              {displayProducts.map((product, idx) => (
+                <Link 
+                  key={product.id} 
+                  to={`/product/${product.id}`}
+                  className="group relative min-w-[85vw] md:min-w-[400px] snap-center block flex flex-col h-full"
+                >
+                  {/* Card Image Container with Frames - SAME AS COLLECTIONS */}
+                  <div className="aspect-[3/4] border border-zinc-300 p-1 relative overflow-hidden bg-white/50 backdrop-blur-sm group-hover:border-blue-600 transition-colors shadow-sm group-hover:shadow-lg">
+                    <div className="w-full h-full overflow-hidden relative">
+                      <img 
+                        src={getImageUrl(product.images[0], 500)} // Optimized here 
+                        alt={product.name}
+                        className="w-full h-full object-cover grayscale opacity-90 group-hover:opacity-100 group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700 ease-out" 
+                      />
+                      
+                      {/* Hover Overlay */}
+                      <div className="absolute inset-0 bg-blue-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 mix-blend-multiply" />
+                      
+                      {/* Center Action Button */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
+                        <div className="bg-white/90 text-blue-600 px-6 py-3 font-jura font-bold uppercase tracking-widest text-sm border border-blue-600 backdrop-blur-md shadow-lg">
+                          VIEW_DROP
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Corner Markers */}
+                    <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-blue-600 z-10" />
+                    <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-blue-600 z-10" />
+                    <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-blue-600 z-10" />
+                    <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-blue-600 z-10" />
+                  </div>
+
+                  {/* Text Details Below */}
+                  <div className="mt-4 flex justify-between items-start border-b border-zinc-300 pb-2 group-hover:border-blue-600 transition-colors">
+                    <div>
+                      <h3 className="font-jura text-2xl font-bold uppercase text-black group-hover:text-blue-600 transition-colors">
+                        {product.name}
+                      </h3>
+                      <p className="font-mono text-xs text-zinc-500 mt-1">
+                         {product.categories?.slice(0, 1).join(' // ').toUpperCase()} // {product.price.toLocaleString('ru-RU')} ₽
+                      </p>
+                    </div>
+                    <span className="font-mono text-xs text-zinc-400 group-hover:text-blue-600 transition-colors">
+                      [0{idx + 1}]
+                    </span>
+                  </div>
+                </Link>
               ))}
+               {/* Spacer for right padding on mobile */}
+               <div className="min-w-[1px] md:hidden" />
              </div>
           </div>
         </div>
@@ -152,18 +238,32 @@ const Home: React.FC = () => {
             </div>
            
             <div className="flex flex-col md:flex-row items-end gap-4">
-               <Link to="/collections" className="font-mono text-xs text-blue-600 hover:text-white flex items-center gap-2 group border border-blue-200 px-6 py-3 hover:bg-blue-600 transition-all uppercase tracking-wider bg-white/50 backdrop-blur-sm">
-                 <Layers size={14} /> [ДОСТУП К КОЛЛЕКЦИЯМ]
+                {/* Scroll Buttons for Collections */}
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => scroll(collectionsScrollRef, 'left')} 
+                        className="p-3 border border-zinc-300 hover:border-black hover:bg-black hover:text-white transition-all"
+                        aria-label="Scroll Left"
+                    >
+                        <ChevronLeft size={20} />
+                    </button>
+                    <button 
+                        onClick={() => scroll(collectionsScrollRef, 'right')} 
+                        className="p-3 border border-zinc-300 hover:border-black hover:bg-black hover:text-white transition-all"
+                        aria-label="Scroll Right"
+                    >
+                        <ChevronRight size={20} />
+                    </button>
+                </div>
+               
+               <Link to="/collections" className="font-mono text-xs text-blue-600 hover:text-white flex items-center gap-2 group border border-blue-200 px-6 py-3 hover:bg-blue-600 transition-all uppercase tracking-wider bg-white/50 backdrop-blur-sm h-[46px]">
+                 <Layers size={14} /> [ВСЕ КОЛЛЕКЦИИ]
                </Link>
-               <div className="flex items-center gap-2 font-mono text-xs text-zinc-400">
-                    <span>ЛИСТАЙ</span>
-                    <MoveRight className="w-4 h-4 animate-pulse text-blue-600" />
-               </div>
             </div>
           </div>
 
           <div 
-            ref={scrollContainerRef}
+            ref={collectionsScrollRef}
             className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide scroll-smooth"
             style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
           >
@@ -171,12 +271,12 @@ const Home: React.FC = () => {
               <Link 
                 key={col.id} 
                 to={`/catalog?collection=${col.id}`}
-                className="group relative min-w-[85vw] md:min-w-[400px] snap-center block"
+                className="group relative min-w-[85vw] md:min-w-[400px] snap-center block flex flex-col h-full"
               >
                 <div className="aspect-[3/4] border border-zinc-300 p-1 relative overflow-hidden bg-white/50 backdrop-blur-sm group-hover:border-blue-600 transition-colors shadow-sm group-hover:shadow-lg">
                   <div className="w-full h-full overflow-hidden relative">
                     <img 
-                      src={col.image} 
+                      src={getImageUrl(col.image, 600)} // Optimized here
                       alt={col.title}
                       className="w-full h-full object-cover grayscale opacity-90 group-hover:opacity-100 group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700 ease-out" 
                     />
@@ -211,6 +311,7 @@ const Home: React.FC = () => {
                 </div>
               </Link>
             ))}
+            {/* Spacer for right padding on mobile */}
             <div className="min-w-[1px] md:hidden" />
           </div>
         </div>
