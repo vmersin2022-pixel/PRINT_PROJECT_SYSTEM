@@ -151,8 +151,8 @@ const Admin: React.FC = () => {
     
     // Convert stockMatrix to array for DB
     const variantsToSave = Object.entries(stockMatrix)
-        .filter(([_, stock]) => stock >= 0) // Filter out undefined, keep 0s
-        .map(([size, stock]) => ({ size, stock }));
+        .filter(([_, stock]) => (stock as number) >= 0) // Filter out undefined, keep 0s
+        .map(([size, stock]) => ({ size, stock: stock as number }));
     
     // Derived sizes array (only those with stock > 0 for display)
     const displaySizes = variantsToSave.filter(v => v.stock > 0).map(v => v.size);
@@ -430,7 +430,6 @@ const Admin: React.FC = () => {
                 </div>
             </div>
         )}
-        {/* Orders and Promos tabs... */}
         {activeTab === 'orders' && (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">

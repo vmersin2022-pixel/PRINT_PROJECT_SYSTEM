@@ -126,8 +126,18 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null);
+      
+      // CRITICAL FIX: Clean URL after social login for HashRouter
+      if (event === 'SIGNED_IN') {
+        // If we have a hash with tokens, clean it by navigating to profile
+        if (window.location.hash && window.location.hash.includes('access_token')) {
+             // For HashRouter, we manually set the hash to the target route
+             window.location.hash = '#/profile';
+        }
+      }
+
       // Refresh data when auth state changes (to load userOrders)
       await refreshData();
     });
@@ -187,7 +197,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            redirectTo: window.location.origin
+            redirectTo: window.location.origin // Should result in localhost:3000
         }
     });
     return { error };
@@ -197,7 +207,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       await supabase.auth.signOut();
       setUser(null);
       setUserOrders([]);
-      window.location.reload(); // Hard reload to clear any state
+      window.location.href = '/'; // Hard reload/redirect to home
   };
 
   // --- WISHLIST ---

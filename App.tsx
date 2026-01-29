@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import Home from './pages/index';
 import Catalog from './pages/catalog';
 import ProductDetail from './pages/product';
@@ -62,9 +62,11 @@ const App: React.FC = () => {
           <Route path="/admin" element={<Admin />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/wishlist" element={<WishlistPage />} />
-          <Route path="/profile" element={<ProfilePage />} /> {/* NEW Route */}
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/service" element={<ServicePage />} />
           <Route path="/service/:slug" element={<ServicePage />} />
+          {/* CATCH-ALL: Redirects garbage URLs (like auth tokens) to Home */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
