@@ -249,8 +249,8 @@ const Home: React.FC = () => {
                 ДЛЯ ТЕБЯ ПРИНТЫ
               </FancyButton>
               
-              {/* SECONDARY ACTION: SOLID WHITE WITH BLACK BORDER */}
-              <FancyButton to="#" variant="solid" className="!bg-white !text-black !border-black hover:!bg-black hover:!text-white hover:!border-black shadow-lg">
+              {/* SECONDARY ACTION: LINKED TO ABOUT PAGE */}
+              <FancyButton to="/about" variant="solid" className="!bg-white !text-black !border-black hover:!bg-black hover:!text-white hover:!border-black shadow-lg">
                 О БРЕНДЕ
               </FancyButton>
             </div>
