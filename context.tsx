@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Product, CartItem, AppContextType, Category, Collection, Order, PromoCode, ProductVariant, UserProfile } from './types';
 import { supabase } from './supabaseClient';
 import { User } from '@supabase/supabase-js';
@@ -10,6 +11,7 @@ const INITIAL_PRODUCTS: Product[] = [];
 const INITIAL_COLLECTIONS: Collection[] = [];
 
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
   const [collections, setCollections] = useState<Collection[]>(INITIAL_COLLECTIONS);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -138,9 +140,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null);
       
-      // Removed direct window.location.hash manipulation here to avoid conflicts with App.tsx router logic
-      // App.tsx AuthRedirectHandler now handles the redirect logic for HashRouter callbacks.
-
       // Refresh data when auth state changes (to load userOrders and admin data)
       await refreshData();
     });
@@ -212,10 +211,19 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   };
 
   const logout = async () => {
-      await supabase.auth.signOut();
+      // 1. Immediate UI update
       setUser(null);
       setUserOrders([]);
-      window.location.href = '/'; // Hard reload/redirect to home
+      
+      // 2. Perform Supabase SignOut
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.error("SignOut error:", e);
+      }
+      
+      // 3. Navigate to home using Router instead of window reload to keep state clean
+      navigate('/', { replace: true });
   };
 
   // --- WISHLIST ---
