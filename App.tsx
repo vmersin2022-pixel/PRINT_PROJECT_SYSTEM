@@ -1,5 +1,5 @@
-import React from 'react';
-import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import Home from './pages/index';
 import Catalog from './pages/catalog';
 import ProductDetail from './pages/product';
@@ -16,16 +16,42 @@ import Cart from './components/layout/Cart';
 import Footer from './components/layout/Footer';
 import CustomCursor from './components/ui/CustomCursor';
 import { Loader2 } from 'lucide-react';
+import { supabase } from './supabaseClient';
 
 // New Component to handle the Auth Redirects vs 404s
 const AuthRedirectHandler = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+
   // HashRouter treats "#access_token=..." as the pathname "/access_token=..."
   // We check if the current "path" looks like a Supabase token or error
   const isAuthCallback = location.pathname.includes('access_token') || 
                          location.pathname.includes('type=recovery') ||
                          location.pathname.includes('error_description') ||
                          location.pathname.includes('error=');
+
+  useEffect(() => {
+    if (isAuthCallback) {
+      // Check if session is already established
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+           // User is logged in, clear the ugly URL and go to profile
+           navigate('/profile', { replace: true });
+        }
+      });
+
+      // Also listen for the event in case it happens *after* this component mounts
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+           navigate('/profile', { replace: true });
+        }
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      }
+    }
+  }, [isAuthCallback, navigate]);
 
   if (isAuthCallback) {
       return (

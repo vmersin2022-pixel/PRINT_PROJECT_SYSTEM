@@ -138,14 +138,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null);
       
-      // CRITICAL FIX: Clean URL after social login for HashRouter
-      if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') {
-        // If we have a hash with tokens, clean it by navigating to profile
-        if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('type=recovery'))) {
-             // For HashRouter, we manually set the hash to the target route
-             window.location.hash = '#/profile';
-        }
-      }
+      // Removed direct window.location.hash manipulation here to avoid conflicts with App.tsx router logic
+      // App.tsx AuthRedirectHandler now handles the redirect logic for HashRouter callbacks.
 
       // Refresh data when auth state changes (to load userOrders and admin data)
       await refreshData();
