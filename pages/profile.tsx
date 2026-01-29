@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context';
 import FancyButton from '../components/ui/FancyButton';
-import { LogOut, Package, Mail, Loader2, Clock, CheckCircle, Lock, ArrowRight, Zap } from 'lucide-react';
+import { LogOut, Package, Mail, Loader2, Clock, CheckCircle, Lock, ArrowRight, Zap, AlertTriangle } from 'lucide-react';
 import { Order } from '../types';
 
 const ProfilePage: React.FC = () => {
@@ -42,7 +42,6 @@ const ProfilePage: React.FC = () => {
               const { error } = await loginWithPassword(email, password);
               if (error) {
                  if (error.message.includes('Invalid login credentials')) {
-                     // Check if it might be unconfirmed email
                      throw new Error('Неверный Email или пароль (или почта не подтверждена).');
                  }
                  throw error;
@@ -51,33 +50,44 @@ const ProfilePage: React.FC = () => {
           } 
           else if (authMode === 'register') {
               if (!password) { setMessage({type: 'error', text: 'Придумайте пароль'}); setLoading(false); return; }
+              if (password.length < 6) { setMessage({type: 'error', text: 'Пароль слишком короткий (минимум 6 символов)'}); setLoading(false); return; }
+              
               const { data, error } = await signupWithPassword(email, password);
-              if (error) throw error;
+              
+              if (error) {
+                  // LOGGING ERROR FOR DEBUGGING
+                  console.error("SIGNUP ERROR:", error);
+                  throw error; 
+              }
               
               // INTELLIGENT REGISTRATION CHECK:
               if (data?.session) {
                   // User is already logged in
               } else if (data?.user) {
                   // Session is null but user created -> Email confirmation is ON.
-                  setMessage({ type: 'success', text: `Аккаунт создан! Пожалуйста, подтвердите почту для входа.` });
+                  setMessage({ type: 'success', text: `АККАУНТ СОЗДАН! МЫ ОТПРАВИЛИ ССЫЛКУ НА ${email.toUpperCase()}. ПОДТВЕРДИТЕ ЕЁ ДЛЯ ВХОДА.` });
               }
           }
       } catch (error: any) {
           let msg = error.message || 'Ошибка авторизации';
+          let fullError = JSON.stringify(error);
           
           // --- CUSTOM ERROR TRANSLATION ---
           if (msg.includes('User already registered') || msg.includes('already registered')) {
               msg = 'Пользователь с таким Email уже зарегистрирован. Пожалуйста, войдите.';
           } else if (msg.includes('Email not confirmed') || msg.includes('not confirmed')) {
               msg = 'Почта не подтверждена. Проверьте входящие письма.';
-          } else if (msg.includes('Password should be')) {
-              msg = 'Пароль должен содержать минимум 6 символов.';
-          } else if (msg.includes('rate limit')) {
-              msg = 'Слишком много попыток. Подождите немного.';
+          } else if (msg.includes('rate limit') || msg.includes('Too many requests')) {
+              msg = 'Слишком много попыток. Подождите 60 секунд.';
           } else if (msg.includes('security purposes')) {
               msg = 'В целях безопасности подождите перед повторной попыткой.';
           }
           
+          // Show technical details if it's an unknown error to help debug "no record" issues
+          if (!msg.includes('Пользователь') && !msg.includes('Почта')) {
+              console.warn("Supabase Raw Error:", error);
+          }
+
           setMessage({ type: 'error', text: msg });
       } finally {
           setLoading(false);
@@ -160,8 +170,10 @@ const ProfilePage: React.FC = () => {
 
                     {/* STATUS MESSAGE */}
                     {message && (
-                        <div className={`p-3 mb-4 text-xs font-mono border ${message.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-                            {message.text}
+                        <div className={`p-4 mb-4 text-xs font-mono border flex items-start gap-2 ${message.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                            {message.type === 'error' && <AlertTriangle size={16} className="shrink-0 mt-0.5" />}
+                            {message.type === 'success' && <CheckCircle size={16} className="shrink-0 mt-0.5" />}
+                            <div>{message.text}</div>
                         </div>
                     )}
 

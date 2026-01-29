@@ -139,9 +139,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       setUser(session?.user ?? null);
       
       // CRITICAL FIX: Clean URL after social login for HashRouter
-      if (event === 'SIGNED_IN') {
+      if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') {
         // If we have a hash with tokens, clean it by navigating to profile
-        if (window.location.hash && window.location.hash.includes('access_token')) {
+        if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('type=recovery'))) {
              // For HashRouter, we manually set the hash to the target route
              window.location.hash = '#/profile';
         }
@@ -180,6 +180,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       const { error } = await supabase.auth.signInWithOtp({
           email,
           options: {
+              // Explicitly set redirect to origin to handle localhost vs prod correctly
               emailRedirectTo: window.location.origin,
           }
       });
@@ -197,7 +198,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const signupWithPassword = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signUp({
         email,
-        password
+        password,
+        options: {
+            // CRITICAL: Ensure the link brings user back to correct domain
+            emailRedirectTo: window.location.origin,
+        }
     });
     return { data, error };
   };
@@ -206,7 +211,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            redirectTo: window.location.origin // Should result in localhost:3000
+            redirectTo: window.location.origin
         }
     });
     return { error };

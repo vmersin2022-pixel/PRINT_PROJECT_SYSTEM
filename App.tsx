@@ -21,10 +21,11 @@ import { Loader2 } from 'lucide-react';
 const AuthRedirectHandler = () => {
   const location = useLocation();
   // HashRouter treats "#access_token=..." as the pathname "/access_token=..."
-  // We check if the current "path" looks like a Supabase token
+  // We check if the current "path" looks like a Supabase token or error
   const isAuthCallback = location.pathname.includes('access_token') || 
                          location.pathname.includes('type=recovery') ||
-                         location.pathname.includes('error_description');
+                         location.pathname.includes('error_description') ||
+                         location.pathname.includes('error=');
 
   if (isAuthCallback) {
       return (
@@ -32,6 +33,11 @@ const AuthRedirectHandler = () => {
           <Loader2 className="animate-spin mb-4 text-blue-600" size={32} />
           <h2 className="text-xl font-bold uppercase">Авторизация...</h2>
           <p className="font-mono text-xs text-zinc-400 mt-2">SYSTEM_HANDSHAKE_INIT</p>
+          {location.pathname.includes('error') && (
+              <p className="text-red-500 text-xs font-mono mt-4 max-w-md text-center">
+                  Ошибка авторизации. Ссылка могла устареть.
+              </p>
+          )}
         </div>
       );
   }
