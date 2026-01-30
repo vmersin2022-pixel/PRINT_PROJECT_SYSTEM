@@ -441,15 +441,41 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     localStorage.removeItem('print_project_promo');
   }
 
-  // --- ORDERS LOGIC ---
+  // --- ORDERS LOGIC (WITH INVENTORY UPDATE) ---
   const createOrder = async (orderData: Omit<Order, 'id' | 'created_at'>) => {
-      const { error } = await supabase.from('orders').insert([orderData]);
-      if (error) {
-          console.error("Order Create Error:", error);
-          alert("ОШИБКА СОЗДАНИЯ ЗАКАЗА: " + error.message);
+      // 1. Create the Order
+      const { error: orderError } = await supabase.from('orders').insert([orderData]);
+      
+      if (orderError) {
+          console.error("Order Create Error:", orderError);
+          alert("ОШИБКА СОЗДАНИЯ ЗАКАЗА: " + orderError.message);
           return false;
       }
-      if (user) await fetchUserData(user); // Refresh only user data
+
+      // 2. Decrement Stock for each item
+      // Note: In a production app, this should be a Database Function (RPC) to ensure atomicity.
+      // Here we do it client-side loop for simplicity in this MVP.
+      for (const item of orderData.order_items) {
+          // Find the variant needed
+          const variant = products
+              .find(p => p.id === item.id)
+              ?.variants?.find(v => v.size === item.selectedSize);
+
+          if (variant) {
+              const newStock = Math.max(0, variant.stock - item.quantity);
+              
+              // Update variant in DB
+              await supabase
+                  .from('product_variants')
+                  .update({ stock: newStock })
+                  .eq('id', variant.id);
+          }
+      }
+
+      // 3. Refresh Data
+      await fetchPublicData();
+      if (user) await fetchUserData(user);
+      
       return true;
   };
 

@@ -4,7 +4,28 @@ import { useApp } from '../context';
 import { Product, Category, Collection, Order, PromoCode } from '../types';
 import FancyButton from '../components/ui/FancyButton';
 import { supabase } from '../supabaseClient';
-import { Trash2, Edit2, Eye, Plus, LogOut, Package, Upload, Layers, ShoppingCart, Tag, RefreshCcw, Users, CheckSquare, Square, Ruler, Loader2, Send } from 'lucide-react';
+import { Trash2, Edit2, Eye, Plus, LogOut, Package, Upload, Layers, ShoppingCart, Tag, RefreshCcw, Users, CheckSquare, Square, Ruler, Loader2, Send, X, Printer, Phone, MapPin, Search } from 'lucide-react';
+
+// --- STYLES FOR PRINTING ---
+const printStyles = `
+  @media print {
+    body * {
+      visibility: hidden;
+    }
+    #printable-area, #printable-area * {
+      visibility: visible;
+    }
+    #printable-area {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      background: white;
+      color: black;
+      padding: 20px;
+    }
+  }
+`;
 
 const Admin: React.FC = () => {
   const { 
@@ -21,9 +42,12 @@ const Admin: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const [activeTab, setActiveTab] = useState<'products' | 'collections' | 'orders' | 'promocodes' | 'users'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'collections' | 'orders' | 'promocodes' | 'users'>('orders');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  // --- ORDER DETAILS DRAWER STATE ---
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   // --- PRODUCT FORM STATE ---
   const [isEditing, setIsEditing] = useState(false);
@@ -36,6 +60,7 @@ const Admin: React.FC = () => {
   const [productForm, setProductForm] = useState<Partial<Product>>({
     name: '',
     price: 0,
+    old_price: 0,
     categories: [],
     collectionIds: [],
     description: '',
@@ -161,6 +186,7 @@ const Admin: React.FC = () => {
     const payload = {
         name: productForm.name!,
         price: Number(productForm.price),
+        old_price: Number(productForm.old_price || 0),
         categories: productForm.categories || [],
         collectionIds: productForm.collectionIds || [],
         description: productForm.description || '',
@@ -207,7 +233,7 @@ const Admin: React.FC = () => {
   const resetProductForm = () => {
     setIsEditing(false);
     setEditId(null);
-    setProductForm({ name: '', price: 0, categories: [], collectionIds: [], description: '', images: ['https://picsum.photos/800/1000'], sizes: [], isNew: false, isHidden: false });
+    setProductForm({ name: '', price: 0, old_price: 0, categories: [], collectionIds: [], description: '', images: ['https://picsum.photos/800/1000'], sizes: [], isNew: false, isHidden: false });
     setStockMatrix({ 'S': 0, 'M': 0, 'L': 0, 'XL': 0 });
   };
 
@@ -239,16 +265,219 @@ const Admin: React.FC = () => {
       setPromoForm({ code: '', percent: 10 });
   };
 
+  // --- ORDER HELPERS ---
+  const getStatusBadge = (status: Order['status']) => {
+      const colors = { 
+          'new': 'bg-blue-600 text-white', 
+          'paid': 'bg-green-600 text-white', 
+          'shipping': 'bg-yellow-500 text-black', 
+          'completed': 'bg-black text-white', 
+          'cancelled': 'bg-red-600 text-white' 
+      };
+      const labels = {
+          'new': 'НОВЫЙ',
+          'paid': 'ОПЛАЧЕН',
+          'shipping': 'В ПУТИ',
+          'completed': 'ВЫПОЛНЕН',
+          'cancelled': 'ОТМЕНА'
+      }
+      return <span className={`px-2 py-1 text-[10px] font-mono font-bold uppercase rounded ${colors[status]}`}>{labels[status] || status}</span>
+  };
+
+  const handlePrint = () => {
+      window.print();
+  };
+
   if (loading) return <div className="min-h-screen bg-zinc-900 flex items-center justify-center text-white font-mono">ЗАГРУЗКА СИСТЕМЫ...</div>;
   
   const availableCategories: Category[] = ['fresh_drop', 't-shirts', 'sets', 'accessories', 'last_drop'];
-  const getStatusBadge = (status: Order['status']) => {
-      const colors = { 'new': 'bg-blue-600 text-white', 'paid': 'bg-green-600 text-white', 'shipping': 'bg-yellow-500 text-black', 'completed': 'bg-zinc-800 text-white', 'cancelled': 'bg-red-600 text-white' };
-      return <span className={`px-2 py-1 text-[10px] font-mono font-bold uppercase rounded ${colors[status]}`}>{status}</span>
-  };
 
   return (
-    <div className="min-h-screen bg-zinc-50 pt-24 pb-12">
+    <div className="min-h-screen bg-zinc-50 pt-24 pb-12 relative">
+      <style>{printStyles}</style>
+
+      {/* --- ORDER DETAILS DRAWER (SLIDE-OVER) --- */}
+      <div className={`fixed inset-0 z-50 flex justify-end transition-all duration-300 pointer-events-none ${selectedOrder ? 'bg-black/20' : ''}`}>
+          <div className={`bg-white h-full w-full max-w-xl shadow-2xl border-l border-black flex flex-col pointer-events-auto transform transition-transform duration-300 ${selectedOrder ? 'translate-x-0' : 'translate-x-full'}`}>
+              
+              {/* Drawer Header */}
+              {selectedOrder && (
+                <>
+                <div className="p-6 border-b border-zinc-200 flex justify-between items-center bg-zinc-50">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                             <h2 className="font-jura font-bold text-2xl uppercase">ЗАКАЗ #{selectedOrder.id.slice(0,8)}</h2>
+                             {getStatusBadge(selectedOrder.status)}
+                        </div>
+                        <p className="font-mono text-xs text-zinc-400">
+                             {new Date(selectedOrder.created_at).toLocaleString()}
+                        </p>
+                    </div>
+                    <button onClick={() => setSelectedOrder(null)} className="p-2 hover:bg-zinc-200 rounded-full">
+                        <X size={24}/>
+                    </button>
+                </div>
+
+                {/* Drawer Body */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                    
+                    {/* Items */}
+                    <section>
+                        <h3 className="font-bold text-sm uppercase mb-4 border-b pb-2">Товары в заказе</h3>
+                        <div className="space-y-4">
+                            {selectedOrder.order_items.map((item, idx) => (
+                                <div key={idx} className="flex gap-4">
+                                    <div className="w-16 h-20 bg-zinc-100 border flex-shrink-0">
+                                        <img src={item.images[0]} className="w-full h-full object-cover" />
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-sm uppercase">{item.name}</div>
+                                        <div className="text-xs font-mono text-zinc-500">
+                                            Размер: {item.selectedSize} | Кол-во: {item.quantity}
+                                        </div>
+                                        <div className="text-sm font-bold mt-1">
+                                            {item.price.toLocaleString()} ₽
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* Customer Info */}
+                    <section className="bg-zinc-50 p-4 border border-zinc-200">
+                        <h3 className="font-bold text-sm uppercase mb-4 flex items-center gap-2">
+                             <Users size={16}/> Клиент
+                        </h3>
+                        <div className="grid grid-cols-2 gap-4 text-sm font-mono">
+                             <div>
+                                 <span className="block text-zinc-400 text-[10px]">ФИО</span>
+                                 {selectedOrder.customer_info.firstName} {selectedOrder.customer_info.lastName}
+                             </div>
+                             <div>
+                                 <span className="block text-zinc-400 text-[10px]">ТЕЛЕФОН</span>
+                                 {selectedOrder.customer_info.phone}
+                             </div>
+                             <div className="col-span-2">
+                                 <span className="block text-zinc-400 text-[10px]">EMAIL</span>
+                                 {selectedOrder.customer_info.email}
+                             </div>
+                             <div className="col-span-2">
+                                 <span className="block text-zinc-400 text-[10px] flex items-center gap-1"><MapPin size={10}/> АДРЕС ДОСТАВКИ</span>
+                                 <span className="uppercase break-words">{selectedOrder.customer_info.city}, {selectedOrder.customer_info.address}</span>
+                             </div>
+                             <div className="col-span-2">
+                                 <span className="block text-zinc-400 text-[10px]">МЕТОД ДОСТАВКИ</span>
+                                 {selectedOrder.customer_info.deliveryMethod === 'cdek_point' ? 'CDEK (ПВЗ)' : 'CDEK (Курьер)'}
+                             </div>
+                             {selectedOrder.customer_info.comment && (
+                                 <div className="col-span-2 bg-yellow-50 p-2 border border-yellow-100">
+                                     <span className="block text-zinc-400 text-[10px]">КОММЕНТАРИЙ</span>
+                                     {selectedOrder.customer_info.comment}
+                                 </div>
+                             )}
+                        </div>
+                    </section>
+
+                    {/* Financials */}
+                    <section>
+                        <div className="flex justify-between border-b border-dashed border-zinc-300 py-2">
+                            <span>Сумма товаров</span>
+                            <span>{selectedOrder.total_price} ₽</span> 
+                            {/* Note: Logic simplified for total display */}
+                        </div>
+                         {selectedOrder.customer_info.promoCode && (
+                            <div className="flex justify-between border-b border-dashed border-zinc-300 py-2 text-green-600">
+                                <span>Промокод ({selectedOrder.customer_info.promoCode})</span>
+                                <span>Скидка применена</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between py-2 font-bold text-xl">
+                            <span>ИТОГО</span>
+                            <span>{selectedOrder.total_price.toLocaleString()} ₽</span>
+                        </div>
+                    </section>
+
+                </div>
+
+                {/* Drawer Footer Actions */}
+                <div className="p-6 border-t border-zinc-200 bg-zinc-50 flex flex-col gap-3">
+                    <div className="flex gap-2">
+                        <select 
+                            value={selectedOrder.status}
+                            onChange={(e) => updateOrderStatus(selectedOrder.id, e.target.value as any)}
+                            className="flex-1 border border-zinc-300 p-2 text-sm font-mono uppercase bg-white focus:outline-none focus:border-blue-600"
+                        >
+                            <option value="new">НОВЫЙ</option>
+                            <option value="paid">ОПЛАЧЕН</option>
+                            <option value="shipping">В ПУТИ</option>
+                            <option value="completed">ВЫПОЛНЕН</option>
+                            <option value="cancelled">ОТМЕНЕН</option>
+                        </select>
+                        <button 
+                            onClick={handlePrint}
+                            className="bg-black text-white px-4 py-2 flex items-center gap-2 hover:bg-zinc-800"
+                        >
+                            <Printer size={16}/> Печать
+                        </button>
+                    </div>
+                </div>
+
+                {/* --- HIDDEN PRINT AREA --- */}
+                <div id="printable-area" className="hidden">
+                    <div className="text-center mb-8 border-b-2 border-black pb-4">
+                        <h1 className="text-4xl font-bold uppercase mb-2">PRINT PROJECT</h1>
+                        <p className="font-mono text-sm">НАКЛАДНАЯ К ЗАКАЗУ #{selectedOrder.id.slice(0,8).toUpperCase()}</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-8 mb-8">
+                        <div>
+                            <h3 className="font-bold border-b border-black mb-2">ОТПРАВИТЕЛЬ</h3>
+                            <p className="text-sm">ИП Давлетшина Ю.В.</p>
+                            <p className="text-sm">Казань, ул. Баумана 1</p>
+                        </div>
+                        <div>
+                            <h3 className="font-bold border-b border-black mb-2">ПОЛУЧАТЕЛЬ</h3>
+                            <p className="text-sm uppercase">{selectedOrder.customer_info.firstName} {selectedOrder.customer_info.lastName}</p>
+                            <p className="text-sm">{selectedOrder.customer_info.phone}</p>
+                            <p className="text-sm uppercase">{selectedOrder.customer_info.city}, {selectedOrder.customer_info.address}</p>
+                        </div>
+                    </div>
+
+                    <table className="w-full text-left border-collapse border border-black mb-8">
+                        <thead>
+                            <tr className="bg-zinc-100">
+                                <th className="border border-black p-2 text-sm">Наименование</th>
+                                <th className="border border-black p-2 text-sm">Размер</th>
+                                <th className="border border-black p-2 text-sm">Кол-во</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {selectedOrder.order_items.map((item, i) => (
+                                <tr key={i}>
+                                    <td className="border border-black p-2">{item.name}</td>
+                                    <td className="border border-black p-2 text-center">{item.selectedSize}</td>
+                                    <td className="border border-black p-2 text-center">{item.quantity}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+
+                    <div className="flex justify-between items-end border-t-2 border-black pt-4">
+                        <div className="text-sm">
+                            <p>Комплектовщик: _________________</p>
+                            <p className="mt-4">Дата: {new Date().toLocaleDateString()}</p>
+                        </div>
+                        <div className="text-xl font-bold">
+                            ВСЕГО ПОЗИЦИЙ: {selectedOrder.order_items.reduce((a,c) => a + c.quantity, 0)}
+                        </div>
+                    </div>
+                </div>
+                </>
+              )}
+          </div>
+      </div>
+
       <div className="container mx-auto px-4">
         
         {/* HEADER */}
@@ -256,16 +485,16 @@ const Admin: React.FC = () => {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <div className={`w-2 h-2 rounded-full animate-pulse ${session ? 'bg-green-500' : 'bg-red-500'}`} />
-              <span className="font-mono text-xs text-zinc-500">{session ? 'БЕЗОПАСНОЕ СОЕДИНЕНИЕ' : 'РЕЖИМ ЧТЕНИЯ'}</span>
+              <span className="font-mono text-xs text-zinc-500">{session ? 'СЕССИЯ АКТИВНА' : 'РЕЖИМ ПРОСМОТРА'}</span>
             </div>
-            <h1 className="font-jura text-4xl font-bold uppercase">Админ Панель</h1>
+            <h1 className="font-jura text-4xl font-bold uppercase">ERP SYSTEM</h1>
             <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
                 {[
-                    { id: 'products', label: 'ТОВАРЫ', icon: Package }, 
-                    { id: 'collections', label: 'КОЛЛЕКЦИИ', icon: Layers }, 
                     { id: 'orders', label: 'ЗАКАЗЫ', icon: ShoppingCart }, 
-                    { id: 'promocodes', label: 'ПРОМОКОДЫ', icon: Tag },
-                    { id: 'users', label: 'ПОЛЬЗОВАТЕЛИ', icon: Users } // NEW TAB
+                    { id: 'products', label: 'СКЛАД', icon: Package }, 
+                    { id: 'collections', label: 'КОЛЛЕКЦИИ', icon: Layers }, 
+                    { id: 'promocodes', label: 'ПРОМО', icon: Tag },
+                    { id: 'users', label: 'КЛИЕНТЫ', icon: Users } 
                 ].map(tab => (
                     <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center gap-2 font-mono text-sm px-4 py-2 border border-black transition-colors whitespace-nowrap ${activeTab === tab.id ? 'bg-black text-white' : 'bg-white text-black hover:bg-zinc-100'}`}>
                         <tab.icon size={14} /> {tab.label}
@@ -286,7 +515,62 @@ const Admin: React.FC = () => {
           </div>
         </div>
 
-        {/* --- PRODUCTS TAB --- */}
+        {/* --- ORDERS TAB --- */}
+        {activeTab === 'orders' && (
+            <div className="space-y-6">
+                <div className="flex justify-between items-center bg-white p-4 border border-zinc-200">
+                    <h2 className="font-jura text-xl font-bold uppercase flex gap-2"><ShoppingCart size={18} /> ЗАКАЗЫ ({orders.length})</h2>
+                    <div className="flex gap-2">
+                        <button onClick={() => window.location.reload()} className="p-2 border hover:bg-zinc-100"><RefreshCcw size={16}/></button>
+                    </div>
+                </div>
+
+                <div className="bg-white border border-black overflow-hidden shadow-sm">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-zinc-100 border-b border-black font-mono text-xs uppercase text-zinc-500">
+                                <th className="p-4 w-20">#ID</th>
+                                <th className="p-4">Клиент</th>
+                                <th className="p-4 text-center">Сумма</th>
+                                <th className="p-4 text-center">Статус</th>
+                                <th className="p-4 w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                            {orders.map(order => (
+                                <tr 
+                                    key={order.id} 
+                                    onClick={() => setSelectedOrder(order)}
+                                    className="hover:bg-blue-50/50 cursor-pointer transition-colors group"
+                                >
+                                    <td className="p-4 font-mono font-bold text-xs text-blue-900">
+                                        #{order.id.slice(0,6).toUpperCase()}
+                                        <div className="text-[10px] text-zinc-400 font-normal mt-1">
+                                            {new Date(order.created_at).toLocaleDateString()}
+                                        </div>
+                                    </td>
+                                    <td className="p-4">
+                                        <div className="font-bold text-sm uppercase">{order.customer_info.firstName} {order.customer_info.lastName}</div>
+                                        <div className="font-mono text-xs text-zinc-500">{order.customer_info.phone}</div>
+                                    </td>
+                                    <td className="p-4 text-center font-jura font-bold text-sm">
+                                        {order.total_price.toLocaleString()} ₽
+                                    </td>
+                                    <td className="p-4 text-center">
+                                        {getStatusBadge(order.status)}
+                                    </td>
+                                    <td className="p-4 text-center text-zinc-300 group-hover:text-blue-600">
+                                        <Eye size={18}/>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        )}
+
+        {/* --- PRODUCTS TAB (INVENTORY) --- */}
         {activeTab === 'products' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1">
@@ -303,6 +587,10 @@ const Admin: React.FC = () => {
                         <div>
                             <label className="text-[10px] font-mono text-zinc-400">ЦЕНА (₽)</label>
                             <input type="number" className="w-full bg-zinc-50 border border-zinc-200 p-2 font-jura" value={productForm.price} onChange={e => setProductForm({...productForm, price: Number(e.target.value)})} required />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-mono text-red-400">СТАРАЯ ЦЕНА (SALE)</label>
+                            <input type="number" className="w-full bg-zinc-50 border border-zinc-200 p-2 font-jura" value={productForm.old_price} onChange={e => setProductForm({...productForm, old_price: Number(e.target.value)})} />
                         </div>
                     </div>
                     
@@ -380,36 +668,55 @@ const Admin: React.FC = () => {
                 </form>
                 </div>
             </div>
+            
+            {/* INVENTORY LIST */}
             <div className="lg:col-span-2 space-y-2">
                 <h2 className="font-jura text-xl font-bold uppercase mb-4 flex gap-2"><Package size={18} /> Склад ({products.length})</h2>
-                {products.map(p => (
-                    <div key={p.id} className="flex gap-4 bg-white border p-2 items-center">
-                        <img src={p.images[0]} className="w-10 h-12 object-cover bg-zinc-100" />
-                        <div className="flex-1 min-w-0">
-                            <div className="font-bold text-sm truncate">{p.name}</div>
-                            <div className="text-[10px] font-mono text-zinc-500 mb-1">{p.categories?.map(c => CATEGORY_LABELS[c] || c).join(', ')} | {p.price} ₽</div>
+                {products.map(p => {
+                    // Calculate Total Stock
+                    const totalStock = p.variants ? p.variants.reduce((acc, v) => acc + v.stock, 0) : 0;
+                    const isLowStock = totalStock > 0 && totalStock < 3;
+                    const isSoldOut = totalStock === 0;
+
+                    return (
+                        <div key={p.id} className={`flex gap-4 border p-2 items-center ${isSoldOut ? 'bg-red-50 border-red-200' : isLowStock ? 'bg-orange-50 border-orange-200' : 'bg-white border-zinc-200'}`}>
+                            <div className="relative">
+                                <img src={p.images[0]} className={`w-12 h-16 object-cover bg-zinc-100 ${isSoldOut ? 'grayscale' : ''}`} />
+                                {isSoldOut && <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center font-bold text-[8px] text-white bg-black/50 uppercase">Sold Out</div>}
+                            </div>
                             
-                            {/* Stock Display */}
-                            <div className="flex gap-1 flex-wrap">
-                                {p.variants ? (
-                                    p.variants.map(v => (
-                                        <span key={v.size} className={`text-[9px] px-1 border rounded ${v.stock > 0 ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-                                            {v.size}: {v.stock}
-                                        </span>
-                                    ))
-                                ) : (
-                                    <span className="text-[9px] text-zinc-400">Legacy Stock</span>
-                                )}
+                            <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start">
+                                    <div className="font-bold text-sm truncate uppercase">{p.name}</div>
+                                    <div className="text-xs font-mono">
+                                        {p.old_price && p.old_price > 0 && <span className="line-through text-zinc-400 mr-2">{p.old_price}</span>}
+                                        {p.price} ₽
+                                    </div>
+                                </div>
+                                <div className="text-[10px] font-mono text-zinc-500 mb-2">{p.categories?.map(c => CATEGORY_LABELS[c] || c).join(', ')}</div>
+                                
+                                {/* Stock Badges */}
+                                <div className="flex gap-1 flex-wrap">
+                                    {p.variants ? (
+                                        p.variants.map(v => (
+                                            <span key={v.size} className={`text-[9px] px-1.5 py-0.5 border rounded-sm font-mono ${v.stock === 0 ? 'bg-zinc-200 text-zinc-400 line-through decoration-zinc-500' : v.stock < 2 ? 'bg-red-100 text-red-700 border-red-300 font-bold' : 'bg-white border-zinc-300'}`}>
+                                                {v.size}: {v.stock}
+                                            </span>
+                                        ))
+                                    ) : (
+                                        <span className="text-[9px] text-zinc-400">Legacy Structure</span>
+                                    )}
+                                </div>
                             </div>
+                            {session && (
+                                <div className="flex gap-2">
+                                    <button onClick={() => startEditProduct(p)} className="p-2 hover:bg-blue-50 text-blue-900 border rounded"><Edit2 size={14} /></button>
+                                    <button onClick={() => { if(confirm('Удалить?')) deleteProduct(p.id) }} className="p-2 hover:bg-red-50 text-red-600 border rounded"><Trash2 size={14} /></button>
+                                </div>
+                            )}
                         </div>
-                        {session && (
-                            <div className="flex gap-2">
-                                <button onClick={() => startEditProduct(p)} className="p-1 hover:bg-blue-50 text-blue-900"><Edit2 size={14} /></button>
-                                <button onClick={() => { if(confirm('Удалить?')) deleteProduct(p.id) }} className="p-1 hover:bg-red-50 text-red-600"><Trash2 size={14} /></button>
-                            </div>
-                        )}
-                    </div>
-                ))}
+                    );
+                })}
             </div>
             </div>
         )}
@@ -434,82 +741,6 @@ const Admin: React.FC = () => {
                 <div className="lg:col-span-2 space-y-4">
                     <h2 className="font-jura text-xl font-bold uppercase mb-4 flex gap-2"><Layers size={18} /> Коллекции ({collections.length})</h2>
                     <div className="space-y-6">{collections.map(col => (<div key={col.id} className="bg-white border border-zinc-300 p-4 relative group hover:border-black transition-all"><div className="flex gap-4"><div className="w-20 h-24 bg-zinc-100 flex-shrink-0"><img src={col.image} className="w-full h-full object-cover" /></div><div className="flex-1 pt-1"><h3 className="font-jura font-bold uppercase text-lg">{col.title}</h3><p className="font-mono text-[10px] text-zinc-500 mb-2">{col.desc}</p></div>{session && (<div className="flex flex-col gap-2"><button onClick={() => startEditCollection(col)} className="text-blue-900 p-2"><Edit2 size={16} /></button><button onClick={() => { if(confirm('Удалить?')) deleteCollection(col.id) }} className="text-red-600 p-2"><Trash2 size={16} /></button></div>)}</div></div>))}</div>
-                </div>
-            </div>
-        )}
-        
-        {/* ... (Orders tab) ... */}
-        {activeTab === 'orders' && (
-            <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                    <h2 className="font-jura text-xl font-bold uppercase flex gap-2"><ShoppingCart size={18} /> ЗАКАЗЫ ({orders.length})</h2>
-                    <button onClick={() => window.location.reload()} className="p-2 border hover:bg-zinc-100"><RefreshCcw size={16}/></button>
-                </div>
-                <div className="bg-white border border-black overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-zinc-100 border-b border-black font-mono text-xs uppercase">
-                                    <th className="p-4 border-r">DATE / ID</th>
-                                    <th className="p-4 border-r">CLIENT</th>
-                                    <th className="p-4 border-r">ITEMS</th>
-                                    <th className="p-4 border-r">TOTAL</th>
-                                    <th className="p-4 border-r">STATUS</th>
-                                    <th className="p-4">ACTION</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-zinc-200">
-                                {orders.map(order => (
-                                    <tr key={order.id} className="hover:bg-blue-50/20 text-sm">
-                                        <td className="p-4 border-r align-top">
-                                            <div className="font-mono text-xs text-zinc-500">
-                                                {new Date(order.created_at).toLocaleDateString()}
-                                                <br/>
-                                                {new Date(order.created_at).toLocaleTimeString().slice(0,5)}
-                                            </div>
-                                            <div className="font-mono font-bold text-[10px] text-blue-900 mt-1">#{order.id.slice(0,8)}</div>
-                                        </td>
-                                        <td className="p-4 border-r align-top">
-                                            <div className="font-bold uppercase">{order.customer_info.firstName} {order.customer_info.lastName}</div>
-                                            <div className="font-mono text-xs text-zinc-500 mt-1">{order.customer_info.phone}</div>
-                                        </td>
-                                        <td className="p-4 border-r align-top">
-                                            <div className="space-y-1">
-                                                {order.order_items.map((item, i) => (
-                                                    <div key={i} className="text-xs font-mono border-b border-dashed pb-1 last:border-0">
-                                                        <span className="font-bold">{item.name}</span> ({item.selectedSize}) x{item.quantity}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td className="p-4 border-r align-top font-bold font-jura text-lg">
-                                            {order.total_price.toLocaleString()} ₽
-                                            <div className="text-[10px] font-mono font-normal text-zinc-500 mt-1">{order.payment_method}</div>
-                                        </td>
-                                        <td className="p-4 border-r align-top">
-                                            {getStatusBadge(order.status)}
-                                            {session && (
-                                                <select 
-                                                    value={order.status}
-                                                    onChange={(e) => updateOrderStatus(order.id, e.target.value as any)}
-                                                    className="mt-2 block w-full text-xs border p-1 bg-white"
-                                                >
-                                                    <option value="new">NEW</option>
-                                                    <option value="paid">PAID</option>
-                                                    <option value="shipping">SHIPPING</option>
-                                                    <option value="completed">COMPLETED</option>
-                                                    <option value="cancelled">CANCELLED</option>
-                                                </select>
-                                            )}
-                                        </td>
-                                        <td className="p-4 align-top">
-                                            <button className="p-2 border hover:bg-black hover:text-white transition-colors" title="Открыть детали"><Eye size={16}/></button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
                 </div>
             </div>
         )}
@@ -547,7 +778,7 @@ const Admin: React.FC = () => {
             </div>
         )}
 
-        {/* --- USERS TAB (UPDATED) --- */}
+        {/* --- USERS TAB --- */}
         {activeTab === 'users' && (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">

@@ -14,6 +14,7 @@ export interface Product {
   id: string;
   name: string;
   price: number;
+  old_price?: number; // Marketing: Sale price
   description: string;
   categories: Category[]; 
   collectionIds: string[]; 
