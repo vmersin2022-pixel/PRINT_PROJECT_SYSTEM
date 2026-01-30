@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Product, CartItem, AppContextType, Category, Collection, Order, PromoCode, ProductVariant, UserProfile, TelegramUser } from './types';
+import { Product, CartItem, AppContextType, Category, Collection, Order, PromoCode, ProductVariant, UserProfile, TelegramUser, OrderStatus } from './types';
 import { supabase } from './supabaseClient';
 import { User } from '@supabase/supabase-js';
 
@@ -107,14 +107,17 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const fetchUserData = async (currentUser: User) => {
       try {
           // 1. Fetch User's personal orders
+          // Logic: fetch if user_id matches OR if email matches (fallback)
           const { data: personalOrders, error: personalError } = await supabase
               .from('orders')
               .select('*')
-              .filter('customer_info->>email', 'eq', currentUser.email)
+              .or(`user_id.eq.${currentUser.id},customer_info->>email.eq.${currentUser.email}`)
               .order('created_at', { ascending: false });
           
           if (!personalError && personalOrders) {
               setUserOrders(personalOrders as Order[]);
+          } else if (personalError) {
+              console.error("Personal Orders Error:", personalError);
           }
 
           // 2. Fetch Admin Data (Try to fetch all orders)
@@ -443,8 +446,17 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
   // --- ORDERS LOGIC (WITH INVENTORY UPDATE) ---
   const createOrder = async (orderData: Omit<Order, 'id' | 'created_at'>) => {
-      // 1. Create the Order
-      const { error: orderError } = await supabase.from('orders').insert([orderData]);
+      // 0. Get Current Session User
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUserId = session?.user?.id || null;
+
+      // 1. Create the Order with user_id attached
+      const payload = {
+          ...orderData,
+          user_id: currentUserId, // CRITICAL: Link order to user
+      };
+
+      const { error: orderError } = await supabase.from('orders').insert([payload]);
       
       if (orderError) {
           console.error("Order Create Error:", orderError);
@@ -453,8 +465,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       }
 
       // 2. Decrement Stock for each item
-      // Note: In a production app, this should be a Database Function (RPC) to ensure atomicity.
-      // Here we do it client-side loop for simplicity in this MVP.
       for (const item of orderData.order_items) {
           // Find the variant needed
           const variant = products
@@ -474,12 +484,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
       // 3. Refresh Data
       await fetchPublicData();
-      if (user) await fetchUserData(user);
+      if (session?.user) {
+          await fetchUserData(session.user);
+      }
       
       return true;
   };
 
-  const updateOrderStatus = async (id: string, status: Order['status']) => {
+  const updateOrderStatus = async (id: string, status: OrderStatus) => {
       const { error } = await supabase.from('orders').update({ status }).eq('id', id);
       if (!error && user) await fetchUserData(user);
   };

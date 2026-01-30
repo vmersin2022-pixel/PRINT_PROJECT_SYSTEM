@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context';
-import { Product, Category, Collection, Order, PromoCode } from '../types';
+import { Product, Category, Collection, Order, PromoCode, OrderStatus } from '../types';
 import FancyButton from '../components/ui/FancyButton';
 import { supabase } from '../supabaseClient';
 import { Trash2, Edit2, Eye, Plus, LogOut, Package, Upload, Layers, ShoppingCart, Tag, RefreshCcw, Users, CheckSquare, Square, Ruler, Loader2, Send, X, Printer, Phone, MapPin, Search } from 'lucide-react';
@@ -267,17 +267,21 @@ const Admin: React.FC = () => {
 
   // --- ORDER HELPERS ---
   const getStatusBadge = (status: Order['status']) => {
-      const colors = { 
+      const colors: Record<OrderStatus, string> = { 
           'new': 'bg-blue-600 text-white', 
           'paid': 'bg-green-600 text-white', 
-          'shipping': 'bg-yellow-500 text-black', 
+          'assembly': 'bg-orange-500 text-white', // NEW
+          'ready': 'bg-blue-400 text-white', // NEW
+          'shipping': 'bg-purple-600 text-white', // CHANGED COLOR
           'completed': 'bg-black text-white', 
           'cancelled': 'bg-red-600 text-white' 
       };
-      const labels = {
+      const labels: Record<OrderStatus, string> = {
           'new': 'НОВЫЙ',
           'paid': 'ОПЛАЧЕН',
-          'shipping': 'В ПУТИ',
+          'assembly': 'НА СБОРКЕ',
+          'ready': 'СОБРАН',
+          'shipping': 'В ДОСТАВКЕ',
           'completed': 'ВЫПОЛНЕН',
           'cancelled': 'ОТМЕНА'
       }
@@ -405,12 +409,14 @@ const Admin: React.FC = () => {
                     <div className="flex gap-2">
                         <select 
                             value={selectedOrder.status}
-                            onChange={(e) => updateOrderStatus(selectedOrder.id, e.target.value as any)}
+                            onChange={(e) => updateOrderStatus(selectedOrder.id, e.target.value as OrderStatus)}
                             className="flex-1 border border-zinc-300 p-2 text-sm font-mono uppercase bg-white focus:outline-none focus:border-blue-600"
                         >
                             <option value="new">НОВЫЙ</option>
                             <option value="paid">ОПЛАЧЕН</option>
-                            <option value="shipping">В ПУТИ</option>
+                            <option value="assembly">НА СБОРКЕ</option>
+                            <option value="ready">СОБРАН</option>
+                            <option value="shipping">В ДОСТАВКЕ</option>
                             <option value="completed">ВЫПОЛНЕН</option>
                             <option value="cancelled">ОТМЕНЕН</option>
                         </select>

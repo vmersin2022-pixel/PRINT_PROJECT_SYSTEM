@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context';
 import FancyButton from '../components/ui/FancyButton';
 import { LogOut, Package, Mail, Loader2, Clock, CheckCircle, Lock, AlertTriangle, Send, Smartphone } from 'lucide-react';
-import { Order } from '../types';
+import { Order, OrderStatus } from '../types';
 
 const ProfilePage: React.FC = () => {
   const { user, isSessionLoading, userOrders, loginWithMagicLink, loginWithPassword, signupWithPassword, loginWithGoogle, logout } = useApp();
@@ -95,15 +95,28 @@ const ProfilePage: React.FC = () => {
       }
   };
 
-  const getStatusBadge = (status: Order['status']) => {
-      const styles = {
+  const getStatusBadge = (status: OrderStatus) => {
+      const styles: Record<OrderStatus, string> = {
           'new': 'bg-blue-100 text-blue-800 border-blue-200',
           'paid': 'bg-green-100 text-green-800 border-green-200',
-          'shipping': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+          'assembly': 'bg-orange-100 text-orange-800 border-orange-200',
+          'ready': 'bg-blue-50 text-blue-900 border-blue-200',
+          'shipping': 'bg-purple-100 text-purple-800 border-purple-200',
           'completed': 'bg-zinc-100 text-zinc-800 border-zinc-200',
           'cancelled': 'bg-red-100 text-red-800 border-red-200'
       };
-      return <span className={`px-2 py-1 text-[10px] font-mono uppercase border rounded ${styles[status]}`}>{status}</span>;
+      
+      const labels: Record<OrderStatus, string> = {
+          'new': 'НОВЫЙ',
+          'paid': 'ОПЛАЧЕН',
+          'assembly': 'НА СБОРКЕ',
+          'ready': 'ГОТОВ К ОТПРАВКЕ',
+          'shipping': 'В ПУТИ (ДОСТАВКА)',
+          'completed': 'ВЫПОЛНЕН',
+          'cancelled': 'ОТМЕНЕН'
+      };
+
+      return <span className={`px-2 py-1 text-[10px] font-mono uppercase border rounded ${styles[status]}`}>{labels[status] || status}</span>;
   };
 
   if (isSessionLoading) {

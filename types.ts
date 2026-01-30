@@ -38,10 +38,14 @@ export interface CartItem extends Product {
   quantity: number;
 }
 
+// UPDATED STATUSES
+export type OrderStatus = 'new' | 'paid' | 'assembly' | 'ready' | 'shipping' | 'completed' | 'cancelled';
+
 export interface Order {
   id: string;
+  user_id?: string; // Explicit link to Supabase Auth User
   created_at: string;
-  status: 'new' | 'paid' | 'shipping' | 'completed' | 'cancelled';
+  status: OrderStatus;
   total_price: number;
   customer_info: {
     firstName: string;
@@ -133,7 +137,7 @@ export interface AppContextType {
 
   // Orders
   createOrder: (order: Omit<Order, 'id' | 'created_at'>) => Promise<boolean>;
-  updateOrderStatus: (id: string, status: Order['status']) => Promise<void>;
+  updateOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
 
   // Promocodes
   applyPromoCode: (code: string) => Promise<boolean>;
