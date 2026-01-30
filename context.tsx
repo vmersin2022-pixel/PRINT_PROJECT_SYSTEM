@@ -60,50 +60,52 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   // --- 1. FETCH PUBLIC DATA (PRODUCTS, COLLECTIONS) ---
   // Only runs once on mount, or when explicitly requested (e.g. admin updates)
   const fetchPublicData = async () => {
-      const productPromise = supabase.from('products').select('*');
-      const variantPromise = supabase.from('product_variants').select('*');
-      const collectionPromise = supabase.from('collections').select('*');
-      const promoPromise = supabase.from('promocodes').select('*');
+      try {
+          const productPromise = supabase.from('products').select('*');
+          const variantPromise = supabase.from('product_variants').select('*');
+          const collectionPromise = supabase.from('collections').select('*');
+          const promoPromise = supabase.from('promocodes').select('*');
 
-      const [prodRes, varRes, colRes, promoRes] = await Promise.all([
-          productPromise, variantPromise, collectionPromise, promoPromise
-      ]);
+          const [prodRes, varRes, colRes, promoRes] = await Promise.all([
+              productPromise, variantPromise, collectionPromise, promoPromise
+          ]);
 
-      if (prodRes.error) {
-          console.error("Supabase Product Error:", prodRes.error.message);
-      } else if (prodRes.data) {
-          const varData = varRes.data || [];
-          const typedProducts = prodRes.data.map((p: any) => {
-              const productVariants = varData.filter((v: any) => v.product_id === p.id);
-              return {
-                  ...p,
-                  categories: parseCategories(p.categories || p.category),
-                  collectionIds: parseCollectionIds(p.collectionIds),
-                  variants: productVariants
-              };
-          });
-          setProducts(typedProducts as Product[]);
+          if (prodRes.error) {
+              console.error("Supabase Product Error:", prodRes.error.message);
+          } else if (prodRes.data) {
+              const varData = varRes.data || [];
+              const typedProducts = prodRes.data.map((p: any) => {
+                  const productVariants = varData.filter((v: any) => v.product_id === p.id);
+                  return {
+                      ...p,
+                      categories: parseCategories(p.categories || p.category),
+                      collectionIds: parseCollectionIds(p.collectionIds),
+                      variants: productVariants
+                  };
+              });
+              setProducts(typedProducts as Product[]);
+          }
+
+          if (colRes.data) {
+              const typedCollections = colRes.data.map((c: any) => ({
+                  ...c,
+                  link: c.link || `/catalog?collection=${c.id}`
+              }));
+              setCollections(typedCollections as Collection[]);
+          }
+
+          if (promoRes.data) setPromocodes(promoRes.data as PromoCode[]);
+      } catch (err: any) {
+          // Ignore AbortError which happens during rapid auth redirects
+          if (err.name === 'AbortError' || err.message?.includes('aborted')) return;
+          console.error("Fetch Public Data Error:", err);
       }
-
-      if (colRes.data) {
-          const typedCollections = colRes.data.map((c: any) => ({
-              ...c,
-              link: c.link || `/catalog?collection=${c.id}`
-          }));
-          setCollections(typedCollections as Collection[]);
-      }
-
-      if (promoRes.data) setPromocodes(promoRes.data as PromoCode[]);
   };
 
   // --- 2. FETCH USER PRIVATE DATA ---
   // Runs when user logs in
   const fetchUserData = async (currentUser: User) => {
       // 1. Fetch User's personal orders
-      // Note: If user logged in via Telegram, their email might be a dummy one.
-      // We check orders by 'customer_info->>email' which is entered at checkout manually.
-      // Or we can check by user_id if we update the order structure later.
-      // For now, we keep matching by email (assuming TG users enter real email at checkout).
       const { data: personalOrders } = await supabase
           .from('orders')
           .select('*')
@@ -149,38 +151,62 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
   // --- INITIALIZATION EFFECT ---
   useEffect(() => {
+    let mounted = true;
+
     const init = async () => {
-        // 1. Start fetching public data immediately (don't wait for auth)
-        const publicDataPromise = fetchPublicData();
+        // 1. Start fetching public data immediately
+        await fetchPublicData();
         
-        // 2. Check Auth
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-            setUser(session.user);
-            // Fetch user data in parallel with public data if possible
-            await fetchUserData(session.user);
-        }
-        
-        // Wait for public data to finish before 'ready' (optional, but good for UI consistency)
-        await publicDataPromise;
-        
-        setIsSessionLoading(false); // READY
+        // 2. Check if we are potentially in a Magic Link flow (Hash present)
+        // If hash exists, we SKIP manual session check and wait for onAuthStateChange
+        const isHashAuth = window.location.hash && (
+            window.location.hash.includes('access_token') || 
+            window.location.hash.includes('type=magiclink') ||
+            window.location.hash.includes('type=recovery')
+        );
+
+        if (!isHashAuth) {
+            // Normal load (not a redirect from email)
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            if (session?.user && mounted) {
+                setUser(session.user);
+                await fetchUserData(session.user);
+            }
+            if (mounted) setIsSessionLoading(false); 
+        } 
+        // If isHashAuth is true, we simply wait. Listener below will catch 'SIGNED_IN'.
     };
 
     init();
 
     // 3. Auth Listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      
-      if (currentUser) {
-          await fetchUserData(currentUser);
-      } else {
+      if (!mounted) return;
+
+      if (event === 'SIGNED_IN' && session) {
+          setUser(session.user);
+          
+          // CRITICAL FIX: Add delay to allow URL hash clearing and avoid AbortError
+          setTimeout(async () => {
+             if (mounted) {
+                 await fetchUserData(session.user);
+                 setIsSessionLoading(false);
+             }
+          }, 500); 
+
+      } else if (event === 'SIGNED_OUT') {
+          setUser(null);
           clearUserData();
+          setIsSessionLoading(false);
+      } else if (event === 'INITIAL_SESSION') {
+          // Handle case where session is restored from local storage
+          if (session) {
+             setUser(session.user);
+             await fetchUserData(session.user);
+          }
+          setIsSessionLoading(false);
       }
-      setIsSessionLoading(false);
     });
 
     // Load Wishlist
@@ -191,7 +217,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         } catch (e) { console.error("Failed to parse wishlist"); }
     }
 
-    return () => subscription.unsubscribe();
+    return () => {
+        mounted = false;
+        subscription.unsubscribe();
+    };
   }, []);
 
   // --- AUTO-APPLY SAVED PROMO ---
@@ -230,7 +259,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         email,
         password,
         options: {
-            // CRITICAL: Ensure the link brings user back to correct domain
             emailRedirectTo: window.location.origin,
         }
     });
@@ -247,25 +275,18 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     return { error };
   };
 
-  // --- NEW: TELEGRAM MANUAL AUTH (OPTION 2) ---
   const loginWithTelegram = async (telegramUser: TelegramUser) => {
       try {
-          // 1. Invoke Supabase Edge Function to verify hash and get tokens
-          // Note: You must deploy 'telegram-login' function on Supabase!
           const { data, error } = await supabase.functions.invoke('telegram-login', {
               body: telegramUser
           });
 
-          if (error) {
-              console.error('Edge Function Error:', error);
-              throw new Error('Ошибка соединения с сервером авторизации.');
-          }
+          if (error) throw new Error('Ошибка соединения с сервером авторизации.');
 
           if (!data?.session) {
               throw new Error('Сервер не вернул сессию. Проверьте конфигурацию.');
           }
 
-          // 2. Set the session manually in the client
           const { error: sessionError } = await supabase.auth.setSession(data.session);
           
           if (sessionError) throw sessionError;
@@ -277,18 +298,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   };
 
   const logout = async () => {
-      // 1. Immediate UI update
       setUser(null);
       clearUserData();
-      
-      // 2. Perform Supabase SignOut
       try {
         await supabase.auth.signOut();
       } catch (e) {
         console.error("SignOut error:", e);
       }
-      
-      // 3. Navigate to home using Router instead of window reload to keep state clean
       navigate('/', { replace: true });
   };
 
