@@ -81,6 +81,12 @@ export interface UserProfile {
   full_name?: string;
   telegram_id?: number;
   avatar_url?: string;
+  
+  // NEW FIELDS FOR SYNC
+  current_cart?: CartItem[]; // JSONB column
+  favorites?: string[]; // Array of Product IDs
+  cart_updated_at?: string; // Timestamp
+  last_abandoned_notification?: string; // Timestamp to prevent spam
 }
 
 // NEW: Telegram Data Structure

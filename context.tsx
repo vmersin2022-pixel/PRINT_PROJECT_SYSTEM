@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Product, CartItem, AppContextType, Category, Collection, Order, PromoCode, ProductVariant, UserProfile, TelegramUser, OrderStatus } from './types';
 import { supabase } from './supabaseClient';
@@ -106,8 +106,24 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   // Runs when user logs in
   const fetchUserData = async (currentUser: User) => {
       try {
-          // 1. Fetch User's personal orders
-          // Logic: fetch if user_id matches OR if email matches (fallback)
+          // A. Fetch User Profile (Cart & Wishlist Sync)
+          const { data: profile } = await supabase
+              .from('profiles')
+              .select('current_cart, favorites')
+              .eq('id', currentUser.id)
+              .single();
+
+          if (profile) {
+              // Priority: DB State overwrites Local State on Login
+              if (profile.current_cart && Array.isArray(profile.current_cart) && profile.current_cart.length > 0) {
+                  setCart(profile.current_cart as CartItem[]);
+              }
+              if (profile.favorites && Array.isArray(profile.favorites) && profile.favorites.length > 0) {
+                  setWishlist(profile.favorites as string[]);
+              }
+          }
+
+          // B. Fetch User's personal orders
           const { data: personalOrders, error: personalError } = await supabase
               .from('orders')
               .select('*')
@@ -116,12 +132,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           
           if (!personalError && personalOrders) {
               setUserOrders(personalOrders as Order[]);
-          } else if (personalError) {
-              console.error("Personal Orders Error:", personalError);
           }
 
-          // 2. Fetch Admin Data (Try to fetch all orders)
-          // RLS will block this if not admin, but we just ignore the error usually or handle it
+          // C. Fetch Admin Data (Try to fetch all orders)
           const { data: allOrders, error: orderError } = await supabase
               .from('orders')
               .select('*')
@@ -138,7 +151,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
               if (userData) setAllUsers(userData as UserProfile[]);
           }
       } catch (err: any) {
-          // CRITICAL: Catch AbortError here too
           if (err.name === 'AbortError' || err.message?.includes('aborted')) return;
           console.error("Fetch User Data Error:", err);
       }
@@ -148,6 +160,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       setUserOrders([]);
       setOrders([]);
       setAllUsers([]);
+      // Do not clear cart/wishlist here immediately, let session handle it
   }
 
   // Wrapper for manual refresh from Admin panel
@@ -159,45 +172,75 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       }
   };
 
+  // --- 3. SYNC CART TO SUPABASE (DEBOUNCED) ---
+  // This effect listens to 'cart' changes. 
+  // If user is logged in, it updates the DB after 2 seconds of inactivity.
+  useEffect(() => {
+      if (!user) return; // Only sync for logged in users
+
+      const syncCartToDb = async () => {
+          try {
+              await supabase.from('profiles').update({
+                  current_cart: cart,
+                  cart_updated_at: new Date().toISOString()
+              }).eq('id', user.id);
+          } catch (e) {
+              console.error("Failed to sync cart", e);
+          }
+      };
+
+      const timeoutId = setTimeout(syncCartToDb, 2000); // 2 second debounce
+      return () => clearTimeout(timeoutId);
+  }, [cart, user]);
+
+  // --- 4. SYNC WISHLIST TO SUPABASE (DEBOUNCED) ---
+  useEffect(() => {
+      if (!user) return;
+
+      const syncWishlistToDb = async () => {
+          try {
+              await supabase.from('profiles').update({
+                  favorites: wishlist
+              }).eq('id', user.id);
+          } catch (e) {
+              console.error("Failed to sync wishlist", e);
+          }
+      };
+
+      const timeoutId = setTimeout(syncWishlistToDb, 2000);
+      return () => clearTimeout(timeoutId);
+  }, [wishlist, user]);
+
+
   // --- INITIALIZATION EFFECT ---
   useEffect(() => {
     let mounted = true;
 
     const init = async () => {
-        // 1. Start fetching public data immediately
         await fetchPublicData();
         
-        // 2. Check if we are potentially in a Magic Link flow (Hash present)
-        // If hash exists, we SKIP manual session check and wait for onAuthStateChange
         const isHashAuth = window.location.hash && (
             window.location.hash.includes('access_token') || 
-            window.location.hash.includes('type=magiclink') ||
-            window.location.hash.includes('type=recovery')
+            window.location.hash.includes('type=magiclink')
         );
 
         if (!isHashAuth) {
-            // Normal load (not a redirect from email)
             const { data: { session } } = await supabase.auth.getSession();
-            
             if (session?.user && mounted) {
                 setUser(session.user);
                 await fetchUserData(session.user);
             }
             if (mounted) setIsSessionLoading(false); 
         } 
-        // If isHashAuth is true, we simply wait. Listener below will catch 'SIGNED_IN'.
     };
 
     init();
 
-    // 3. Auth Listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
       if (event === 'SIGNED_IN' && session) {
           setUser(session.user);
-          
-          // CRITICAL FIX: Add delay to allow URL hash clearing and avoid AbortError
           setTimeout(async () => {
              if (mounted) {
                  await fetchUserData(session.user);
@@ -208,9 +251,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       } else if (event === 'SIGNED_OUT') {
           setUser(null);
           clearUserData();
+          // Optionally clear cart on logout, but usually keeping it in local storage is better UX
           setIsSessionLoading(false);
       } else if (event === 'INITIAL_SESSION') {
-          // Handle case where session is restored from local storage
           if (session) {
              setUser(session.user);
              await fetchUserData(session.user);
@@ -219,19 +262,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       }
     });
 
-    // Load Wishlist
-    const savedWishlist = localStorage.getItem('print_project_wishlist');
-    if (savedWishlist) {
-        try {
-            setWishlist(JSON.parse(savedWishlist));
-        } catch (e) { console.error("Failed to parse wishlist"); }
+    // Load Wishlist from LocalStorage (Fallback for guests)
+    // Note: If user logs in, fetchUserData will overwrite this
+    if (!user) {
+        const savedWishlist = localStorage.getItem('print_project_wishlist');
+        if (savedWishlist) {
+            try { setWishlist(JSON.parse(savedWishlist)); } catch (e) {}
+        }
     }
 
     return () => {
         mounted = false;
         subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Intentionally empty dependency array
 
   // --- AUTO-APPLY SAVED PROMO ---
   useEffect(() => {
@@ -248,19 +292,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const loginWithMagicLink = async (email: string) => {
       const { error } = await supabase.auth.signInWithOtp({
           email,
-          options: {
-              // Explicitly set redirect to origin to handle localhost vs prod correctly
-              emailRedirectTo: window.location.origin,
-          }
+          options: { emailRedirectTo: window.location.origin }
       });
       return { error };
   };
 
   const loginWithPassword = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error };
   };
 
@@ -268,9 +306,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-            emailRedirectTo: window.location.origin,
-        }
+        options: { emailRedirectTo: window.location.origin }
     });
     return { data, error };
   };
@@ -278,9 +314,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const loginWithGoogle = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-            redirectTo: window.location.origin
-        }
+        options: { redirectTo: window.location.origin }
     });
     return { error };
   };
@@ -290,17 +324,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           const { data, error } = await supabase.functions.invoke('telegram-login', {
               body: telegramUser
           });
-
           if (error) throw new Error('Ошибка соединения с сервером авторизации.');
-
-          if (!data?.session) {
-              throw new Error('Сервер не вернул сессию. Проверьте конфигурацию.');
-          }
-
+          if (!data?.session) throw new Error('Сервер не вернул сессию.');
           const { error: sessionError } = await supabase.auth.setSession(data.session);
-          
           if (sessionError) throw sessionError;
-
           return { error: null };
       } catch (err: any) {
           return { error: err };
@@ -310,11 +337,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const logout = async () => {
       setUser(null);
       clearUserData();
-      try {
-        await supabase.auth.signOut();
-      } catch (e) {
-        console.error("SignOut error:", e);
-      }
+      setCart([]); // Clear cart on logout
+      setWishlist([]);
+      localStorage.removeItem('print_project_wishlist');
+      try { await supabase.auth.signOut(); } catch (e) { console.error("SignOut error:", e); }
       navigate('/', { replace: true });
   };
 
@@ -325,6 +351,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             ? prev.filter(id => id !== productId)
             : [...prev, productId];
           
+          // Save to local storage for guests
           localStorage.setItem('print_project_wishlist', JSON.stringify(newState));
           return newState;
       });
@@ -375,7 +402,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     if (!error && variants) {
         await supabase.from('product_variants').delete().eq('product_id', id);
-        
         const variantsPayload = variants.map(v => ({
             product_id: id,
             size: v.size,
@@ -385,7 +411,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             await supabase.from('product_variants').insert(variantsPayload);
         }
     }
-    
     if (!error) await fetchPublicData();
   };
 
@@ -438,10 +463,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     setCart(prev => prev.filter(item => !(item.id === productId && item.selectedSize === size)));
   };
 
-  const clearCart = () => {
+  const clearCart = async () => {
     setCart([]);
     setActivePromo(null);
     localStorage.removeItem('print_project_promo');
+    
+    // Clear from DB if logged in
+    if (user) {
+        await supabase.from('profiles').update({ current_cart: [] }).eq('id', user.id);
+    }
   }
 
   // --- ORDERS LOGIC (WITH INVENTORY UPDATE) ---
@@ -466,15 +496,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
       // 2. Decrement Stock for each item
       for (const item of orderData.order_items) {
-          // Find the variant needed
           const variant = products
               .find(p => p.id === item.id)
               ?.variants?.find(v => v.size === item.selectedSize);
 
           if (variant) {
               const newStock = Math.max(0, variant.stock - item.quantity);
-              
-              // Update variant in DB
               await supabase
                   .from('product_variants')
                   .update({ stock: newStock })
@@ -482,7 +509,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           }
       }
 
-      // 3. Refresh Data
+      // 3. Clear Database Cart after successful order (if user exists)
+      if (currentUserId) {
+          await supabase.from('profiles').update({ current_cart: [] }).eq('id', currentUserId);
+      }
+
+      // 4. Refresh Data
       await fetchPublicData();
       if (session?.user) {
           await fetchUserData(session.user);
@@ -547,7 +579,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       allUsers,
       wishlist,
       user,
-      isSessionLoading, // EXPORTED
+      isSessionLoading, 
       isMenuOpen,
       isCartOpen,
       toggleMenu,
@@ -573,7 +605,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       loginWithPassword,
       signupWithPassword,
       loginWithGoogle,
-      loginWithTelegram, // EXPORTED
+      loginWithTelegram,
       logout
     }}>
       {children}
