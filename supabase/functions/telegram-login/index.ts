@@ -1,113 +1,108 @@
-// Follow this setup guide to integrate the Deno runtime into your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 declare const Deno: any;
 
+// 1. Глобальные настройки (строго вверху)
 const BOT_TOKEN = '8430425198:AAEqn_O7CuZ57-pYkMGLN7fBJQo1mCEu-hE';
-const SITE_URL = 'https://print-project-system.vercel.app'; // Change if needed
+const SITE_URL = 'https://print-project-system.vercel.app';
 
-console.log("Telegram Bot Webhook Handler Up!")
+console.log("Smooth-responder bot function started!");
 
 serve(async (req) => {
+  // Обработка CORS (на случай вызова с сайта)
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } });
+  }
+
   try {
-    const url = new URL(req.url);
-    
-    // Simple Webhook Handler
-    // 1. Parse incoming update from Telegram
-    if (req.method === 'POST') {
-        const update = await req.json();
-        
-        if (update.message && update.message.text) {
-            const chatId = update.message.chat.id;
-            const text = update.message.text;
-            const from = update.message.from; // User info
+    const update = await req.json();
 
-            // Check for /start command
-            if (text.startsWith('/start')) {
-                
-                // Initialize Supabase Admin
-                const supabaseAdmin = createClient(
-                    Deno.env.get('SUPABASE_URL') ?? '',
-                    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-                    { auth: { autoRefreshToken: false, persistSession: false } }
-                );
+    // Проверяем наличие сообщения и команды /start
+    if (update.message?.text?.startsWith('/start')) {
+      const from = update.message.from;
+      const chatId = update.message.chat.id;
 
-                const email = `tg_${from.id}@telegram.printproject`;
-                let userId;
+      // 2. Инициализация Supabase клиента
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        { auth: { autoRefreshToken: false, persistSession: false } }
+      );
 
-                // 1. Check if user exists
-                const { data: existingUser } = await supabaseAdmin.from('profiles').select('id').eq('telegram_id', from.id).single();
-                
-                if (existingUser) {
-                    userId = existingUser.id;
-                } else {
-                    // Create new user
-                    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-                        email: email,
-                        email_confirm: true,
-                        user_metadata: { telegram_id: from.id, username: from.username, full_name: from.first_name }
-                    });
-                    
-                    if (createError) {
-                        // Recover if email exists but profile doesn't
-                        const { data: userByEmail } = await supabaseAdmin.rpc('get_user_id_by_email', { email_input: email });
-                        if (userByEmail) userId = userByEmail;
-                        else throw createError;
-                    } else {
-                        userId = newUser.user.id;
-                    }
-                }
+      // Генерируем уникальный email на основе Telegram ID
+      const email = `tg_${from.id}@telegram.printproject`;
 
-                // 2. Update Profile
-                await supabaseAdmin.from('profiles').upsert({
-                    id: userId,
-                    email: email,
-                    telegram_id: from.id,
-                    username: from.username || '',
-                    full_name: [from.first_name, from.last_name].filter(Boolean).join(' '),
-                    avatar_url: '', 
-                    role: 'user'
-                });
+      // 3. Получаем или создаем пользователя в Auth
+      // Используем listUsers для поиска по email, так как это работает стабильнее
+      const { data: usersData, error: listError } = await supabase.auth.admin.listUsers();
+      if (listError) throw listError;
 
-                // 3. Generate Session Magic Link
-                // Use generateLink to create a valid action link
-                const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-                    type: 'magiclink',
-                    email: email,
-                    options: {
-                        redirectTo: `${SITE_URL}/profile`
-                    }
-                });
+      let user = usersData.users.find(u => u.email === email);
 
-                if (linkError) throw linkError;
+      if (!user) {
+        const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
+          email,
+          email_confirm: true,
+          user_metadata: { 
+            telegram_id: from.id, 
+            full_name: `${from.first_name} ${from.last_name || ''}`.trim() 
+          }
+        });
+        if (createError) throw createError;
+        user = newUser.user;
+      }
 
-                // 4. Send Message back to Telegram with the Link
-                const magicLink = linkData.properties.action_link;
-                
-                await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: chatId,
-                        text: `Привет, ${from.first_name}! 👋\n\nНажми на кнопку ниже, чтобы автоматически войти в личный кабинет PRINT PROJECT.`,
-                        reply_markup: {
-                            inline_keyboard: [[
-                                { text: "🔓 ВОЙТИ В АККАУНТ", url: magicLink }
-                            ]]
-                        }
-                    })
-                });
-            }
-        }
+      // 4. Обновляем профиль в БД
+      await supabase.from('profiles').upsert({
+        id: user.id,
+        telegram_id: from.id.toString(),
+        email: email,
+        full_name: `${from.first_name} ${from.last_name || ''}`.trim(),
+        username: from.username || '',
+        role: 'user'
+      });
+
+      // 5. Генерируем магическую ссылку для входа
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: 'magiclink',
+        email: email,
+        options: { redirectTo: `${SITE_URL}/profile` }
+      });
+
+      if (linkError) throw linkError;
+
+      const actionLink = linkData.properties.action_link;
+
+      // 6. Отправляем красиво оформленное сообщение в Telegram
+      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `<b>PRINT PROJECT | ВХОД</b>\n\nЗдравствуйте, ${from.first_name}! 👋\n\nВы запросили авторизацию. Нажмите кнопку ниже, чтобы войти в личный кабинет.\n\n<i>Ссылка действительна 15 минут.</i>`,
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🔓 ВОЙТИ В АККАУНТ", url: actionLink }],
+              [{ text: "📦 Мои заказы", url: `${SITE_URL}/profile` }]
+            ]
+          }
+        })
+      });
     }
 
-    return new Response('ok', { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ ok: true }), { 
+      status: 200, 
+      headers: { 'Content-Type': 'application/json' } 
+    });
 
   } catch (error) {
-    console.error(error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 200 }); // Always 200 for Telegram
+    console.error("Function error:", error.message);
+    return new Response(JSON.stringify({ error: error.message }), { 
+      status: 200, // Возвращаем 200, чтобы Telegram не повторял запросы при ошибках кода
+      headers: { 'Content-Type': 'application/json' } 
+    });
   }
 })

@@ -105,32 +105,39 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   // --- 2. FETCH USER PRIVATE DATA ---
   // Runs when user logs in
   const fetchUserData = async (currentUser: User) => {
-      // 1. Fetch User's personal orders
-      const { data: personalOrders } = await supabase
-          .from('orders')
-          .select('*')
-          .filter('customer_info->>email', 'eq', currentUser.email)
-          .order('created_at', { ascending: false });
-      
-      if (personalOrders) {
-          setUserOrders(personalOrders as Order[]);
-      }
-
-      // 2. Fetch Admin Data (Try to fetch all orders)
-      const { data: allOrders, error: orderError } = await supabase
-          .from('orders')
-          .select('*')
-          .order('created_at', { ascending: false });
-      
-      if (!orderError && allOrders) {
-          setOrders(allOrders as Order[]);
+      try {
+          // 1. Fetch User's personal orders
+          const { data: personalOrders, error: personalError } = await supabase
+              .from('orders')
+              .select('*')
+              .filter('customer_info->>email', 'eq', currentUser.email)
+              .order('created_at', { ascending: false });
           
-          // If successful (Admin), try fetching users
-          const { data: userData } = await supabase
-              .from('profiles')
+          if (!personalError && personalOrders) {
+              setUserOrders(personalOrders as Order[]);
+          }
+
+          // 2. Fetch Admin Data (Try to fetch all orders)
+          // RLS will block this if not admin, but we just ignore the error usually or handle it
+          const { data: allOrders, error: orderError } = await supabase
+              .from('orders')
               .select('*')
               .order('created_at', { ascending: false });
-          if (userData) setAllUsers(userData as UserProfile[]);
+          
+          if (!orderError && allOrders) {
+              setOrders(allOrders as Order[]);
+              
+              // If successful (Admin), try fetching users
+              const { data: userData } = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .order('created_at', { ascending: false });
+              if (userData) setAllUsers(userData as UserProfile[]);
+          }
+      } catch (err: any) {
+          // CRITICAL: Catch AbortError here too
+          if (err.name === 'AbortError' || err.message?.includes('aborted')) return;
+          console.error("Fetch User Data Error:", err);
       }
   };
 
