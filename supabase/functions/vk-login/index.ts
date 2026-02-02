@@ -55,48 +55,73 @@ serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
 
-    // 3. Find or Create User (Safe Method)
-    // We fetch the list of users to check if this email already exists
-    const { data: listData } = await supabaseAdmin.auth.admin.listUsers()
-    let user = listData.users.find((u: any) => u.email === email)
+    let userId = null;
 
-    if (!user) {
-      // Create new user
-      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-        email,
-        email_confirm: true,
-        user_metadata: { 
-            full_name: fullName, 
-            avatar_url: vkUser.photo_400_orig, 
-            vk_id: tokenData.user_id,
-            provider: 'vk'
-        }
-      })
-      if (createError) throw createError
-      user = newUser.user
+    // 3. Try to Create User
+    const { data: createdUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      user_metadata: { 
+          full_name: fullName, 
+          avatar_url: vkUser.photo_400_orig, 
+          vk_id: tokenData.user_id,
+          provider: 'vk'
+      }
+    })
+
+    if (!createError && createdUser.user) {
+       userId = createdUser.user.id;
+    } else if (createError?.message?.includes('already registered') || createError?.message?.includes('already exists') || createError?.status === 422) {
+       // 4. If user exists, find their ID
+       // First try finding in profiles (fastest)
+       const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('email', email)
+        .single();
+       
+       if (profile) {
+         userId = profile.id;
+       } else {
+         // Fallback: search in auth users list (slower but reliable if profile missing)
+         const { data: listData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+         const foundUser = listData.users.find((u: any) => u.email === email);
+         if (foundUser) {
+            userId = foundUser.id;
+         } else {
+            throw new Error('User exists but cannot be found. Contact support.');
+         }
+       }
+
+       // Update metadata for existing user
+       if (userId) {
+         await supabaseAdmin.auth.admin.updateUserById(userId, {
+            user_metadata: { 
+                full_name: fullName, 
+                avatar_url: vkUser.photo_400_orig, 
+                vk_id: tokenData.user_id,
+                provider: 'vk'
+            }
+         });
+       }
     } else {
-      // Update existing user metadata
-      await supabaseAdmin.auth.admin.updateUserById(user.id, {
-        user_metadata: { 
-            full_name: fullName, 
-            avatar_url: vkUser.photo_400_orig, 
-            vk_id: tokenData.user_id,
-            provider: 'vk'
-        }
-      })
+       // Real creation error
+       throw createError;
     }
 
-    // 4. Upsert Public Profile (Ensure data is visible to frontend)
-    if (user) {
-        await supabaseAdmin.from('profiles').upsert({
-            id: user.id,
-            email: email,
-            full_name: fullName,
-            avatar_url: vkUser.photo_400_orig
-        })
+    if (!userId) {
+        throw new Error('Failed to resolve User ID');
     }
 
-    // 5. Generate Magic Link
+    // 5. Upsert Public Profile
+    await supabaseAdmin.from('profiles').upsert({
+        id: userId,
+        email: email,
+        full_name: fullName,
+        avatar_url: vkUser.photo_400_orig
+    })
+
+    // 6. Generate Magic Link
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: email,
