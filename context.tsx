@@ -320,18 +320,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   };
 
   const loginWithVK = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-        // Меняем 'vk' на 'keycloak', так как в Supabase 
-        // мы использовали этот раздел для настройки VK ID
-        provider: 'keycloak', 
-        options: { 
-            redirectTo: window.location.origin,
-            // Добавим это, чтобы VK запрашивал доступ к email, если это возможно
-            scopes: 'email' 
-        }
-    });
-    return { error };
-  };
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'gitlab', // Да, пишем gitlab, но сработает VK!
+    options: {
+      redirectTo: window.location.origin,
+      scopes: 'email'
+    }
+  });
+  return { error };
+};
 
   const loginWithTelegram = async (telegramUser: TelegramUser) => {
       try {
