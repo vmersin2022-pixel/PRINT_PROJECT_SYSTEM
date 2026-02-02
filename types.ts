@@ -3,6 +3,8 @@ import { User } from '@supabase/supabase-js';
 
 export type Category = 't-shirts' | 'sets' | 'accessories' | 'fresh_drop' | 'last_drop';
 
+// ... (Existing Interfaces: ProductVariant, Product, Collection, CartItem, OrderStatus, Order, PromoCode, UserProfile, TelegramUser) ...
+
 export interface ProductVariant {
   id: string;
   product_id: string;
@@ -15,6 +17,7 @@ export interface Product {
   name: string;
   price: number;
   old_price?: number; // Marketing: Sale price
+  cost_price?: number; // NEW: Cost of Goods Sold (Себестоимость)
   description: string;
   categories: Category[]; 
   collectionIds: string[]; 
@@ -23,6 +26,8 @@ export interface Product {
   variants?: ProductVariant[]; // Полная информация о складе
   isNew?: boolean;
   isHidden?: boolean; 
+  isVipOnly?: boolean; // NEW: VIP Access Only
+  releaseDate?: string; // NEW: Drop release date (ISO string)
 }
 
 export interface Collection {
@@ -47,6 +52,9 @@ export interface Order {
   created_at: string;
   status: OrderStatus;
   total_price: number;
+  subtotal?: number; // NEW: Sum before points/discounts
+  points_used?: number; // NEW: Loyalty points used
+  tracking_number?: string; // NEW: CDEK/Post tracking
   customer_info: {
     firstName: string;
     lastName: string;
@@ -67,10 +75,16 @@ export interface Order {
 export interface PromoCode {
   id: string;
   code: string;
-  discount_percent: number; // Kept for legacy compatibility
-  discount_value: number;   // New universal value field
+  discount_value: number;   // Main value field
   discount_type: 'percent' | 'fixed'; // Type of discount
   is_active: boolean;
+  
+  // NEW: Advanced Constructor Fields
+  usage_limit?: number; // Null = infinite
+  usage_count: number; // Default 0
+  min_order_amount: number; // Default 0
+  target_audience: 'all' | 'vip_only' | 'new_users';
+  created_at?: string;
 }
 
 // NEW: User Profile from public table (Expanded)
@@ -81,14 +95,33 @@ export interface UserProfile {
   created_at: string;
   username?: string;
   full_name?: string;
-  telegram_id?: number;
+  telegram_id?: number; // Actually BigInt in DB
   avatar_url?: string;
+  
+  // CRM / RFM Fields (Computed by View)
+  segment?: 'whale' | 'hot' | 'churn' | 'regular' | 'new';
+  orders_count?: number;
+  last_order_date?: string;
   
   // NEW FIELDS FOR SYNC
   current_cart?: CartItem[]; // JSONB column
   favorites?: string[]; // Array of Product IDs
   cart_updated_at?: string; // Timestamp
   last_abandoned_notification?: string; // Timestamp to prevent spam
+  
+  // CRM Fields
+  notes?: string;
+  phone?: string;
+  is_blocked?: boolean;
+  loyalty_points?: number;
+  total_spent?: number; // NEW: For VIP calculation
+  shipping_info?: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      city?: string;
+      address?: string;
+  };
 }
 
 // NEW: Telegram Data Structure
@@ -102,6 +135,17 @@ export interface TelegramUser {
   hash: string;
 }
 
+// NEW: Site Configuration (Headless CMS)
+export interface SiteConfig {
+  id: number;
+  hero_title: string;
+  hero_subtitle: string;
+  hero_image: string;
+  announcement_text: string;
+  sale_mode: boolean;
+  sale_end_date?: string;
+}
+
 export interface AppContextType {
   products: Product[];
   collections: Collection[];
@@ -112,6 +156,9 @@ export interface AppContextType {
   activePromo: PromoCode | null;
   
   allUsers: UserProfile[]; // NEW: List of all registered users for Admin
+  userProfile: UserProfile | null; // NEW: Current user profile data
+  
+  siteConfig: SiteConfig | null; // NEW: Global Site Settings
 
   wishlist: string[];
   user: User | null; // Supabase User
@@ -134,6 +181,7 @@ export interface AppContextType {
   loginWithTelegram: (user: TelegramUser) => Promise<{ error: any }>;
   loginWithVKCode: (code: string) => Promise<{ error: any }>;
   logout: () => Promise<void>;
+  updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
 
   // Products
   addProduct: (product: Product, variants: {size: string, stock: number}[]) => void;
@@ -145,15 +193,18 @@ export interface AppContextType {
   deleteCollection: (id: string) => void;
 
   // Orders
-  createOrder: (order: Omit<Order, 'id' | 'created_at'>) => Promise<boolean>;
-  updateOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
+  createOrder: (order: Omit<Order, 'id' | 'created_at'>, pointsUsed?: number) => Promise<boolean>; // UPDATED Signature
+  updateOrderStatus: (id: string, status: OrderStatus, trackingNumber?: string) => Promise<void>;
 
   // Promocodes
-  applyPromoCode: (code: string) => Promise<boolean>;
+  applyPromoCode: (code: string) => Promise<{success: boolean, message?: string}>; // CHANGED return type
   removePromoCode: () => void;
-  addPromoCodeDb: (code: string, value: number, type: 'percent' | 'fixed') => Promise<void>;
+  addPromoCodeDb: (promo: Partial<PromoCode>) => Promise<void>; // Updated signature
   togglePromoCodeDb: (id: string, currentState: boolean) => Promise<void>;
   deletePromoCodeDb: (id: string) => Promise<void>;
+
+  // CMS
+  updateSiteConfig: (config: Partial<SiteConfig>) => Promise<void>;
 
   // Wishlist
   toggleWishlist: (productId: string) => void;

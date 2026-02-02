@@ -21,6 +21,7 @@ import Header from './components/layout/Header';
 import Menu from './components/layout/Menu';
 import Cart from './components/layout/Cart';
 import Footer from './components/layout/Footer';
+import AnnouncementBar from './components/layout/AnnouncementBar'; // NEW
 import CustomCursor from './components/ui/CustomCursor';
 import { Loader2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
@@ -105,7 +106,7 @@ const App: React.FC = () => {
   const rightText = "SCROLL_Y // INTERFACE_READY // NEXUS_SHELL // URBAN_GEAR // ";
 
   return (
-    <div className="font-sans text-black selection:bg-blue-600 selection:text-white relative">
+    <div className="font-sans text-black selection:bg-blue-600 selection:text-white relative flex flex-col min-h-screen">
       {/* Global Visual Effects */}
       <CustomCursor />
       <div className="bg-noise" />
@@ -127,12 +128,13 @@ const App: React.FC = () => {
         </div>
       </div>
 
+      <AnnouncementBar /> {/* NEW: Sits at the very top */}
       <Header />
       <Menu />
       <Cart />
       
       {/* Main Content with padding for side marquees */}
-      <main className="lg:px-8 transition-all duration-300">
+      <main className="lg:px-8 transition-all duration-300 flex-grow">
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/" element={<Home />} />
@@ -148,7 +150,6 @@ const App: React.FC = () => {
             <Route path="/service" element={<ServicePage />} />
             <Route path="/service/:slug" element={<ServicePage />} />
             
-            {/* Modified Catch-All to support Auth Tokens */}
             <Route path="*" element={<AuthRedirectHandler />} />
           </Routes>
         </Suspense>

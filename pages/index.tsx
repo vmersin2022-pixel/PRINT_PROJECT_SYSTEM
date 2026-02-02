@@ -1,15 +1,53 @@
 
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, MoveRight, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowRight, MoveRight, Layers, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import FancyButton from '../components/ui/FancyButton';
 import PromoSequence from '../components/ui/PromoSequence';
 import ProductCard from '../components/ui/ProductCard';
 import { useApp } from '../context';
 import { getImageUrl } from '../utils';
 
+// --- COUNTDOWN COMPONENT ---
+const HeroCountdown: React.FC<{ targetDate: string }> = ({ targetDate }) => {
+    const [timeLeft, setTimeLeft] = useState<{days: number, hours: number, minutes: number, seconds: number} | null>(null);
+
+    useEffect(() => {
+        const calculate = () => {
+            const diff = +new Date(targetDate) - +new Date();
+            if (diff > 0) {
+                return {
+                    days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+                    hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+                    minutes: Math.floor((diff / 1000 / 60) % 60),
+                    seconds: Math.floor((diff / 1000) % 60)
+                };
+            }
+            return null;
+        };
+        setTimeLeft(calculate());
+        const timer = setInterval(() => setTimeLeft(calculate()), 1000);
+        return () => clearInterval(timer);
+    }, [targetDate]);
+
+    if (!timeLeft) return null;
+
+    return (
+        <div className="flex gap-4 font-jura text-white drop-shadow-md animate-fade-in mt-6">
+            {['days', 'hours', 'minutes', 'seconds'].map((unit) => (
+                <div key={unit} className="flex flex-col items-center bg-red-600/80 backdrop-blur border border-red-500 p-2 min-w-[60px]">
+                    <span className="text-2xl md:text-3xl font-bold">
+                        {(timeLeft as any)[unit].toString().padStart(2, '0')}
+                    </span>
+                    <span className="text-[9px] font-mono uppercase opacity-80">{unit}</span>
+                </div>
+            ))}
+        </div>
+    );
+};
+
 const Home: React.FC = () => {
-  const { products, collections } = useApp();
+  const { products, collections, siteConfig } = useApp();
   const productsScrollRef = useRef<HTMLDivElement>(null);
   const collectionsScrollRef = useRef<HTMLDivElement>(null);
   
@@ -26,9 +64,6 @@ const Home: React.FC = () => {
   // Generic scroll handler
   const scroll = (ref: React.RefObject<HTMLDivElement>, direction: 'left' | 'right') => {
     if (ref.current) {
-        // Adjust scroll amount based on card width
-        // Collections: 400px card + 24px gap ~ 424px -> scroll 450
-        // Products: 300px card + 24px gap ~ 324px -> scroll 340
         const scrollAmount = ref === collectionsScrollRef ? 450 : 340; 
         ref.current.scrollBy({
             left: direction === 'right' ? scrollAmount : -scrollAmount,
@@ -37,56 +72,77 @@ const Home: React.FC = () => {
     }
   };
   
+  // Defaults if CMS not loaded yet
+  const heroImage = siteConfig?.hero_image || "https://vwspjdsmdxmbzrancyhy.supabase.co/storage/v1/object/public/images/Generated-Image-January-28_-2026-10_16AM.jpeg";
+  const heroTitle = siteConfig?.hero_title || "PRINT PROJECT GAME";
+  const heroSubtitle = siteConfig?.hero_subtitle || "СИНХРОНИЗИРУЙ_СВОЙ_СТИЛЬ_С_ВНУТРЕННИМ_КОДОМ.";
+  const isSaleMode = siteConfig?.sale_mode;
+
   return (
     <div className="min-h-screen">
       
-      {/* --- HERO SECTION (GAME / INTERACTIVE) --- */}
+      {/* --- HERO SECTION (DYNAMIC FROM CMS) --- */}
       <section className="relative w-full h-screen bg-black overflow-hidden flex items-center justify-center z-20 border-b border-zinc-900">
-        {/* Glow effect - RAL 5009 */}
-        <div className="absolute top-1/2 left-1/4 w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[150px] pointer-events-none animate-pulse" />
+        
+        {/* Sale Mode Overlay Effect */}
+        {isSaleMode && (
+            <div className="absolute inset-0 z-10 pointer-events-none bg-red-900/10 mix-blend-overlay animate-pulse-slow" />
+        )}
+
+        {/* Glow effect */}
+        <div className={`absolute top-1/2 left-1/4 w-[500px] h-[500px] rounded-full blur-[150px] pointer-events-none animate-pulse ${isSaleMode ? 'bg-red-600/20' : 'bg-blue-600/20'}`} />
 
         <div className="absolute inset-0 z-0">
           <img 
-            src="https://vwspjdsmdxmbzrancyhy.supabase.co/storage/v1/object/public/images/Generated-Image-January-28_-2026-10_16AM.jpeg" 
-            alt="Game Interface"
-            className="w-full h-full object-cover opacity-60 mix-blend-screen"
+            src={heroImage} 
+            alt="Hero"
+            className="w-full h-full object-cover opacity-60 mix-blend-screen transition-opacity duration-1000"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/50 to-transparent" />
-          {/* Grid updated to RAL 5009 Tint */}
           <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(46,89,132,0.1)_50%)] bg-[length:100%_4px] pointer-events-none opacity-50" />
         </div>
 
         <div className="container mx-auto px-4 relative z-10 flex flex-col justify-center items-start h-full">
           <div className="max-w-3xl animate-fade-up">
-            <div className="inline-flex items-center gap-2 border border-blue-600/50 bg-blue-900/20 px-3 py-1 mb-4 backdrop-blur-md">
-              <span className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse-fast" />
-              <span className="font-mono text-xs text-blue-200 tracking-widest">INTERACTIVE_MODE</span>
+            <div className={`inline-flex items-center gap-2 border px-3 py-1 mb-4 backdrop-blur-md ${isSaleMode ? 'border-red-600/50 bg-red-900/20' : 'border-blue-600/50 bg-blue-900/20'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full animate-pulse-fast ${isSaleMode ? 'bg-red-600' : 'bg-blue-600'}`} />
+              <span className={`font-mono text-xs tracking-widest ${isSaleMode ? 'text-red-200' : 'text-blue-200'}`}>
+                  {isSaleMode ? 'SALE_MODE_ACTIVE' : 'INTERACTIVE_MODE'}
+              </span>
             </div>
 
-            <h2 className="font-jura text-5xl md:text-7xl font-bold uppercase text-white mb-4 leading-[0.9] drop-shadow-[0_0_25px_rgba(46,89,132,0.3)]">
-              PRINT<br />PROJECT<br />
-              <span className="text-transparent text-stroke-white">GAME</span>
-            </h2>
+            <h2 
+                className="font-jura text-5xl md:text-7xl font-bold uppercase text-white mb-4 leading-[0.9] drop-shadow-[0_0_25px_rgba(46,89,132,0.3)] whitespace-pre-line"
+                dangerouslySetInnerHTML={{ __html: heroTitle.replace(/\n/g, '<br/>') }}
+            />
 
-            <p className="font-montserrat text-zinc-300 text-sm md:text-base max-w-lg mb-8 leading-relaxed border-l-4 border-blue-600 shadow-[calc(-4px)_0_15px_rgba(46,89,132,0.3)] pl-6 bg-black/40 p-4 backdrop-blur-md">
+            <p className={`font-montserrat text-zinc-300 text-sm md:text-base max-w-lg mb-8 leading-relaxed border-l-4 shadow-[calc(-4px)_0_15px_rgba(46,89,132,0.3)] pl-6 bg-black/40 p-4 backdrop-blur-md ${isSaleMode ? 'border-red-600' : 'border-blue-600'}`}>
+              <span className="block font-jura font-bold text-lg text-white tracking-wide mb-2">
+                {heroSubtitle}
+              </span>
               Это не просто магазин. Это игра, где ты выбираешь состояние,
               а мы показываем принты, которые с ним совпадают.
-              <br />
-              {/* UPDATED PHRASE: RAL 5009 Gradient */}
-              <span className="mt-2 block font-jura font-bold text-lg text-ral-gradient tracking-wide">
-                СИНХРОНИЗИРУЙ_СВОЙ_СТИЛЬ_С_ВНУТРЕННИМ_КОДОМ.
-              </span>
             </p>
 
-            <FancyButton to="/catalog?category=sets" variant="shutter">
+            {/* SALE TIMER */}
+            {isSaleMode && siteConfig?.sale_end_date && (
+                <div className="mb-8">
+                    <p className="text-red-500 font-mono text-xs uppercase tracking-widest mb-1 flex items-center gap-2">
+                        <Clock size={12}/> До конца акции:
+                    </p>
+                    <HeroCountdown targetDate={siteConfig.sale_end_date} />
+                </div>
+            )}
+
+            <FancyButton to="/catalog?category=sets" variant="shutter" className={isSaleMode ? '!border-red-600 hover:!bg-red-600' : ''}>
               АКТИВИРОВАТЬ СОСТОЯНИЕ
             </FancyButton>
           </div>
         </div>
       </section>
 
-      {/* Infinite Seamless Marquee - RAL 5009 */}
-      <div className="bg-blue-600 text-white py-3 border-y border-blue-700 overflow-hidden whitespace-nowrap flex select-none relative z-20">
+      {/* Infinite Seamless Marquee */}
+      <div className={`${isSaleMode ? 'bg-red-600 border-red-700' : 'bg-blue-600 border-blue-700'} text-white py-3 border-y overflow-hidden whitespace-nowrap flex select-none relative z-20`}>
         <div className="animate-marquee shrink-0 flex items-center min-w-full">
             <span className="font-jura text-sm tracking-[0.3em] uppercase mr-8">{marqueeText}</span>
             <span className="mx-8 text-white/50">●</span>
@@ -101,7 +157,7 @@ const Home: React.FC = () => {
         </div>
       </div>
 
-      {/* Featured Grid (Now Scrollable Fresh Drop - UPDATED VISUALS TO MATCH COLLECTIONS) */}
+      {/* Featured Grid */}
       <section className="pt-12 pb-24 bg-transparent relative overflow-hidden">
         {/* Background Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none" />
@@ -111,9 +167,8 @@ const Home: React.FC = () => {
           <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-8">
             <div className="relative">
               <div className="flex items-center gap-3 mb-2">
-                {/* RAL 5009 Pulse */}
-                <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse shadow-[0_0_10px_#2E5984]" />
-                <span className="font-mono text-xs text-blue-600 font-bold tracking-widest uppercase">
+                <span className={`w-2 h-2 rounded-full animate-pulse shadow-[0_0_10px_currentColor] ${isSaleMode ? 'bg-red-600 text-red-600' : 'bg-blue-600 text-blue-600'}`} />
+                <span className={`font-mono text-xs font-bold tracking-widest uppercase ${isSaleMode ? 'text-red-600' : 'text-blue-600'}`}>
                   Incoming Signal: Fresh Drop
                 </span>
               </div>
@@ -123,28 +178,11 @@ const Home: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-4">
-                 {/* Nav Buttons */}
                  <div className="flex gap-2">
-                    <button 
-                        onClick={() => scroll(productsScrollRef, 'left')} 
-                        className="p-3 border border-zinc-300 hover:border-black hover:bg-black hover:text-white transition-all"
-                        aria-label="Scroll Left"
-                    >
-                        <ChevronLeft size={20} />
-                    </button>
-                    <button 
-                        onClick={() => scroll(productsScrollRef, 'right')} 
-                        className="p-3 border border-zinc-300 hover:border-black hover:bg-black hover:text-white transition-all"
-                        aria-label="Scroll Right"
-                    >
-                        <ChevronRight size={20} />
-                    </button>
+                    <button onClick={() => scroll(productsScrollRef, 'left')} className="p-3 border border-zinc-300 hover:border-black hover:bg-black hover:text-white transition-all"><ChevronLeft size={20} /></button>
+                    <button onClick={() => scroll(productsScrollRef, 'right')} className="p-3 border border-zinc-300 hover:border-black hover:bg-black hover:text-white transition-all"><ChevronRight size={20} /></button>
                 </div>
-
-                <Link 
-                to="/catalog?category=fresh_drop" 
-                className="group hidden sm:flex items-center gap-4 pl-6 pr-4 py-3 border-b border-zinc-300 hover:border-blue-600 transition-colors bg-white/30 backdrop-blur-sm"
-                >
+                <Link to="/catalog?category=fresh_drop" className="group hidden sm:flex items-center gap-4 pl-6 pr-4 py-3 border-b border-zinc-300 hover:border-blue-600 transition-colors bg-white/30 backdrop-blur-sm">
                     <div className="text-right">
                         <span className="block font-jura font-bold text-sm uppercase group-hover:text-blue-600 transition-colors">СМОТРЕТЬ ВСЕ</span>
                     </div>
@@ -154,65 +192,16 @@ const Home: React.FC = () => {
           </div>
 
           <div className="relative">
-             <div className="hidden md:block absolute -top-4 -left-4 w-8 h-8 border-l-2 border-t-2 border-zinc-200" />
-             <div className="hidden md:block absolute -top-4 -right-4 w-8 h-8 border-r-2 border-t-2 border-zinc-200" />
-
-             {/* SCROLLABLE CONTAINER FOR PRODUCTS - Resized to be smaller (300px) */}
              <div 
                 ref={productsScrollRef}
                 className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide scroll-smooth"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
              >
               {displayProducts.map((product, idx) => (
-                <Link 
-                  key={product.id} 
-                  to={`/product/${product.id}`}
-                  className="group relative min-w-[70vw] md:min-w-[300px] snap-center block flex flex-col h-full"
-                >
-                  {/* Card Image Container with Frames - SAME AS COLLECTIONS but smaller */}
-                  <div className="aspect-[3/4] border border-zinc-300 p-1 relative overflow-hidden bg-white/50 backdrop-blur-sm group-hover:border-blue-600 transition-colors shadow-sm group-hover:shadow-lg">
-                    <div className="w-full h-full overflow-hidden relative">
-                      <img 
-                        src={getImageUrl(product.images[0], 500)} // Optimized here 
-                        alt={product.name}
-                        className="w-full h-full object-cover grayscale opacity-90 group-hover:opacity-100 group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700 ease-out" 
-                      />
-                      
-                      {/* Hover Overlay */}
-                      <div className="absolute inset-0 bg-blue-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 mix-blend-multiply" />
-                      
-                      {/* Center Action Button */}
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
-                        <div className="bg-white/90 text-blue-600 px-6 py-3 font-jura font-bold uppercase tracking-widest text-sm border border-blue-600 backdrop-blur-md shadow-lg">
-                          VIEW_DROP
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Corner Markers */}
-                    <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-blue-600 z-10" />
-                    <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-blue-600 z-10" />
-                    <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-blue-600 z-10" />
-                    <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-blue-600 z-10" />
-                  </div>
-
-                  {/* Text Details Below */}
-                  <div className="mt-4 flex justify-between items-start border-b border-zinc-300 pb-2 group-hover:border-blue-600 transition-colors">
-                    <div>
-                      <h3 className="font-jura text-xl font-bold uppercase text-black group-hover:text-blue-600 transition-colors">
-                        {product.name}
-                      </h3>
-                      <p className="font-mono text-xs text-zinc-500 mt-1">
-                         {product.categories?.slice(0, 1).join(' // ').toUpperCase()} // {product.price.toLocaleString('ru-RU')} ₽
-                      </p>
-                    </div>
-                    <span className="font-mono text-xs text-zinc-400 group-hover:text-blue-600 transition-colors">
-                      [0{idx + 1}]
-                    </span>
-                  </div>
-                </Link>
+                <div key={product.id} className="min-w-[70vw] md:min-w-[300px] snap-center">
+                    <ProductCard product={product} />
+                </div>
               ))}
-               {/* Spacer for right padding on mobile */}
                <div className="min-w-[1px] md:hidden" />
              </div>
           </div>
@@ -231,35 +220,22 @@ const Home: React.FC = () => {
         <div className="container mx-auto px-4 relative z-10">
           <div className="flex flex-col md:flex-row justify-between items-end mb-12 border-b border-zinc-300 pb-6 gap-6">
             
-            <div className="relative border-l-4 border-blue-600 shadow-[calc(-4px)_0_20px_rgba(46,89,132,0.1)] pl-6 py-2 bg-white/40 backdrop-blur-md border-y border-r border-zinc-200 pr-6">
+            <div className={`relative border-l-4 shadow-[calc(-4px)_0_20px_rgba(46,89,132,0.1)] pl-6 py-2 bg-white/40 backdrop-blur-md border-y border-r border-zinc-200 pr-6 ${isSaleMode ? 'border-red-600' : 'border-blue-600'}`}>
                  <h2 className="font-jura text-4xl md:text-5xl uppercase font-bold tracking-tight text-black mb-2">
                 КОЛЛЕКЦИИ
                 </h2>
                 <p className="font-mono text-xs text-zinc-500">
-                    <span className="text-blue-600 font-bold">СИСТЕМНЫЕ ДАННЫЕ:</span> отобранные серии принтов
+                    <span className={`${isSaleMode ? 'text-red-600' : 'text-blue-600'} font-bold`}>СИСТЕМНЫЕ ДАННЫЕ:</span> отобранные серии принтов
                 </p>
             </div>
            
             <div className="flex flex-col md:flex-row items-end gap-4">
-                {/* Scroll Buttons for Collections */}
                 <div className="flex gap-2">
-                    <button 
-                        onClick={() => scroll(collectionsScrollRef, 'left')} 
-                        className="p-3 border border-zinc-300 hover:border-black hover:bg-black hover:text-white transition-all"
-                        aria-label="Scroll Left"
-                    >
-                        <ChevronLeft size={20} />
-                    </button>
-                    <button 
-                        onClick={() => scroll(collectionsScrollRef, 'right')} 
-                        className="p-3 border border-zinc-300 hover:border-black hover:bg-black hover:text-white transition-all"
-                        aria-label="Scroll Right"
-                    >
-                        <ChevronRight size={20} />
-                    </button>
+                    <button onClick={() => scroll(collectionsScrollRef, 'left')} className="p-3 border border-zinc-300 hover:border-black hover:bg-black hover:text-white transition-all"><ChevronLeft size={20} /></button>
+                    <button onClick={() => scroll(collectionsScrollRef, 'right')} className="p-3 border border-zinc-300 hover:border-black hover:bg-black hover:text-white transition-all"><ChevronRight size={20} /></button>
                 </div>
                
-               <Link to="/collections" className="font-mono text-xs text-blue-600 hover:text-white flex items-center gap-2 group border border-blue-200 px-6 py-3 hover:bg-blue-600 transition-all uppercase tracking-wider bg-white/50 backdrop-blur-sm h-[46px]">
+               <Link to="/collections" className={`font-mono text-xs flex items-center gap-2 group border px-6 py-3 transition-all uppercase tracking-wider bg-white/50 backdrop-blur-sm h-[46px] ${isSaleMode ? 'border-red-200 text-red-600 hover:bg-red-600 hover:text-white' : 'border-blue-200 text-blue-600 hover:bg-blue-600 hover:text-white'}`}>
                  <Layers size={14} /> [ВСЕ КОЛЛЕКЦИИ]
                </Link>
             </div>
@@ -276,10 +252,10 @@ const Home: React.FC = () => {
                 to={`/catalog?collection=${col.id}`}
                 className="group relative min-w-[85vw] md:min-w-[400px] snap-center block flex flex-col h-full"
               >
-                <div className="aspect-[3/4] border border-zinc-300 p-1 relative overflow-hidden bg-white/50 backdrop-blur-sm group-hover:border-blue-600 transition-colors shadow-sm group-hover:shadow-lg">
+                <div className={`aspect-[3/4] border p-1 relative overflow-hidden bg-white/50 backdrop-blur-sm transition-colors shadow-sm group-hover:shadow-lg ${isSaleMode ? 'border-zinc-300 group-hover:border-red-600' : 'border-zinc-300 group-hover:border-blue-600'}`}>
                   <div className="w-full h-full overflow-hidden relative">
                     <img 
-                      src={getImageUrl(col.image, 600)} // Optimized here
+                      src={getImageUrl(col.image, 600)}
                       alt={col.title}
                       className="w-full h-full object-cover grayscale opacity-90 group-hover:opacity-100 group-hover:grayscale-0 group-hover:scale-105 transition-all duration-700 ease-out" 
                     />
@@ -287,34 +263,28 @@ const Home: React.FC = () => {
                     <div className="absolute inset-0 bg-blue-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 mix-blend-multiply" />
                     
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-4 group-hover:translate-y-0">
-                      <div className="bg-white/90 text-blue-600 px-6 py-3 font-jura font-bold uppercase tracking-widest text-sm border border-blue-600 backdrop-blur-md shadow-lg">
+                      <div className={`bg-white/90 px-6 py-3 font-jura font-bold uppercase tracking-widest text-sm border backdrop-blur-md shadow-lg ${isSaleMode ? 'text-red-600 border-red-600' : 'text-blue-600 border-blue-600'}`}>
                         ACCESS_DATA
                       </div>
                     </div>
                   </div>
-
-                  <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-blue-600 z-10" />
-                  <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-blue-600 z-10" />
-                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-blue-600 z-10" />
-                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-blue-600 z-10" />
                 </div>
 
-                <div className="mt-4 flex justify-between items-start border-b border-zinc-300 pb-2 group-hover:border-blue-600 transition-colors">
+                <div className="mt-4 flex justify-between items-start border-b border-zinc-300 pb-2 transition-colors">
                   <div>
-                    <h3 className="font-jura text-2xl font-bold uppercase text-black group-hover:text-blue-600 transition-colors">
+                    <h3 className="font-jura text-2xl font-bold uppercase text-black">
                       {col.title}
                     </h3>
                     <p className="font-mono text-xs text-zinc-500 mt-1">
                       {col.desc}
                     </p>
                   </div>
-                  <span className="font-mono text-xs text-zinc-400 group-hover:text-blue-600 transition-colors">
-                    [0{col.id.replace('col', '').substring(0,2)}]
+                  <span className="font-mono text-xs text-zinc-400">
+                    [0{col.id.substring(0,2)}]
                   </span>
                 </div>
               </Link>
             ))}
-            {/* Spacer for right padding on mobile */}
             <div className="min-w-[1px] md:hidden" />
           </div>
         </div>
@@ -322,7 +292,6 @@ const Home: React.FC = () => {
 
       {/* --- PHILOSOPHY SECTION (UPDATED) --- */}
       <section className="relative pt-12 pb-24 border-t border-zinc-200 overflow-hidden bg-transparent">
-        {/* Background Elements */}
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-[url('/public/images/Generated-Image-January-28_-2026-10_16AM.jpeg')] bg-cover bg-center grayscale opacity-30 mix-blend-luminosity" />
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-50 via-zinc-50/50 to-transparent" />
@@ -331,40 +300,26 @@ const Home: React.FC = () => {
 
         <div className="container mx-auto px-4 z-10 relative">
           <div className="max-w-6xl w-full relative">
-            
             <div className="relative mb-8">
               <h1 className="font-jura text-6xl md:text-8xl lg:text-9xl font-bold uppercase leading-[0.85] mb-6 tracking-tighter mix-blend-darken text-black/90">
-                НЕ<br />
-                СЛУЧАЙНЫЕ<br />
-                ПРИНТЫ
+                НЕ<br />СЛУЧАЙНЫЕ<br />ПРИНТЫ
               </h1>
-              <div className="font-montserrat text-sm md:text-base max-w-[500px] text-black font-medium leading-relaxed bg-white/40 backdrop-blur-md border-l-2 border-blue-600 p-4 shadow-lg">
-                Принтов слишком много.
-                Футболок — ещё больше.
+              <div className={`font-montserrat text-sm md:text-base max-w-[500px] text-black font-medium leading-relaxed bg-white/40 backdrop-blur-md border-l-2 p-4 shadow-lg ${isSaleMode ? 'border-red-600' : 'border-blue-600'}`}>
+                Принтов слишком много. Футболок — ещё больше.
                 Мы убрали лишнее и собрали принты, которые хочется носить.
                 Характер. Интересы. Настроение.
               </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 mt-12">
-              {/* PRIMARY ACTION: SOLID BLACK */}
               <FancyButton to="/catalog" variant="solid" className="shadow-2xl">
-                СМОТРЕТЬ ОТОБРАННЫЕ 
-                ДЛЯ ТЕБЯ ПРИНТЫ
+                СМОТРЕТЬ ОТОБРАННЫЕ ДЛЯ ТЕБЯ ПРИНТЫ
               </FancyButton>
-              
-              {/* SECONDARY ACTION: LINKED TO ABOUT PAGE */}
               <FancyButton to="/about" variant="solid" className="!bg-white !text-black !border-black hover:!bg-black hover:!text-white hover:!border-black shadow-lg">
                 О БРЕНДЕ
               </FancyButton>
             </div>
-
           </div>
-        </div>
-
-        <div className="absolute bottom-4 right-4 font-mono text-xs text-blue-600 hidden md:block">
-          COORD: 35.6762° N, 139.6503° E <br />
-          ZONE: A-1 // STATUS: ACTIVE
         </div>
       </section>
 

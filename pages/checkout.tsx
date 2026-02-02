@@ -3,14 +3,15 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context';
 import { useNavigate } from 'react-router-dom';
 import FancyButton from '../components/ui/FancyButton';
-import { ShieldCheck, CreditCard, Loader2 } from 'lucide-react';
+import { ShieldCheck, CreditCard, Loader2, Sparkles } from 'lucide-react';
 import AddressInput from '../components/ui/AddressInput';
 import { formatPhoneNumber } from '../utils';
 
 const Checkout: React.FC = () => {
-  const { cart, activePromo, createOrder, clearCart } = useApp();
+  const { cart, activePromo, createOrder, clearCart, userProfile } = useApp();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [usePoints, setUsePoints] = useState(false);
 
   // Redirect if cart is empty
   useEffect(() => {
@@ -42,15 +43,21 @@ const Checkout: React.FC = () => {
           discountAmount = activePromo.discount_value;
       } else {
           // Fallback to legacy percent if type is missing or 'percent'
-          const value = activePromo.discount_value || activePromo.discount_percent;
+          const value = activePromo.discount_value;
           discountAmount = Math.round(subtotal * (value / 100));
       }
   }
   // Cap discount at subtotal
   discountAmount = Math.min(discountAmount, subtotal);
 
+  // POINTS CALCULATION
+  const totalAfterPromo = subtotal - discountAmount;
+  const maxPointsUsage = Math.floor(totalAfterPromo * 0.5); // Max 50%
+  const userPoints = userProfile?.loyalty_points || 0;
+  const pointsToDeduct = usePoints ? Math.min(userPoints, maxPointsUsage) : 0;
+
   const deliveryPrice = deliveryMethod === 'cdek_door' ? 550 : 350;
-  const total = subtotal - discountAmount + deliveryPrice;
+  const total = totalAfterPromo - pointsToDeduct + deliveryPrice;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       let val = e.target.value;
@@ -76,8 +83,7 @@ const Checkout: React.FC = () => {
       e.preventDefault();
       setLoading(true);
 
-      // Create Order in DB
-      // We embed promo details into customer_info to avoid changing DB schema structure immediately
+      // Create Order in DB with Points Logic
       const success = await createOrder({
           status: 'new',
           total_price: total,
@@ -89,7 +95,7 @@ const Checkout: React.FC = () => {
           },
           order_items: cart,
           payment_method: paymentMethod
-      });
+      }, pointsToDeduct); // Pass points used
 
       setLoading(false);
 
@@ -302,6 +308,37 @@ const Checkout: React.FC = () => {
                             <span>{deliveryPrice} ₽</span>
                         </div>
                     </div>
+
+                    {/* POINTS REDEMPTION */}
+                    {userPoints > 0 && (
+                        <div className="bg-yellow-50 border border-yellow-200 p-3 mt-4 flex justify-between items-center">
+                            <div>
+                                <div className="flex items-center gap-2 font-bold font-jura text-sm text-yellow-800">
+                                    <Sparkles size={14} className="fill-yellow-600 text-yellow-600" />
+                                    {userPoints} БОНУСОВ
+                                </div>
+                                <p className="text-[10px] text-yellow-700 font-mono">
+                                    Доступно: {Math.min(userPoints, maxPointsUsage)}
+                                </p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    className="sr-only peer" 
+                                    checked={usePoints}
+                                    onChange={() => setUsePoints(!usePoints)}
+                                />
+                                <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-yellow-500"></div>
+                            </label>
+                        </div>
+                    )}
+
+                    {usePoints && pointsToDeduct > 0 && (
+                        <div className="flex justify-between items-center font-mono text-sm text-yellow-600 font-bold mt-2">
+                            <span>СПИСАНИЕ БАЛЛОВ</span>
+                            <span>-{pointsToDeduct} ₽</span>
+                        </div>
+                    )}
 
                     <div className="border-t border-black mt-4 pt-4 flex justify-between items-end mb-6">
                         <span className="font-jura text-lg font-bold">ИТОГО К ОПЛАТЕ</span>

@@ -1,19 +1,23 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, ArrowRight, Send, Tag, CreditCard } from 'lucide-react';
+import { X, Trash2, ArrowRight, Send, Tag, CreditCard, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context';
 import FancyButton from '../ui/FancyButton';
 import { getImageUrl } from '../../utils';
 
 const Cart: React.FC = () => {
-  const { isCartOpen, toggleCart, cart, removeFromCart, activePromo, applyPromoCode, removePromoCode } = useApp();
+  const { isCartOpen, toggleCart, cart, removeFromCart, activePromo, applyPromoCode, removePromoCode, userProfile } = useApp();
   const navigate = useNavigate();
 
-  // Local state for input, global state for applied promo
+  // Local state
   const [promoInput, setPromoInput] = useState('');
   const [promoStatus, setPromoStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [promoErrorMsg, setPromoErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // Points Redemption State
+  const [usePoints, setUsePoints] = useState(false);
 
   // Sync active promo with status on mount/change
   useEffect(() => {
@@ -30,33 +34,48 @@ const Cart: React.FC = () => {
 
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   
-  // DISCOUNT CALCULATION LOGIC
+  // 1. PROMO DISCOUNT CALCULATION
   let discountAmount = 0;
   if (activePromo) {
-      if (activePromo.discount_type === 'fixed') {
-          discountAmount = activePromo.discount_value;
+      // Re-verify min amount in render to auto-disable if user removed items
+      if (activePromo.min_order_amount > subtotal) {
+          // If subtotal drops below limit, we don't apply math, but don't remove code yet to let user add items
+          // Visual indication handled below
       } else {
-          // Fallback to legacy percent if type is missing or 'percent'
-          const value = activePromo.discount_value || activePromo.discount_percent;
-          discountAmount = Math.round(subtotal * (value / 100));
+          if (activePromo.discount_type === 'fixed') {
+              discountAmount = activePromo.discount_value;
+          } else {
+              const value = activePromo.discount_value;
+              discountAmount = Math.round(subtotal * (value / 100));
+          }
       }
   }
-  
-  // Ensure discount doesn't exceed total
   discountAmount = Math.min(discountAmount, subtotal);
-  const total = subtotal - discountAmount;
+  const totalAfterPromo = subtotal - discountAmount;
+
+  // 2. POINTS CALCULATION
+  // Max usage: 50% of the totalAfterPromo
+  const maxPointsUsage = Math.floor(totalAfterPromo * 0.5);
+  // User available points
+  const userPoints = userProfile?.loyalty_points || 0;
+  // Actual points to deduct if toggle is ON
+  const pointsToDeduct = usePoints ? Math.min(userPoints, maxPointsUsage) : 0;
+
+  const finalTotal = totalAfterPromo - pointsToDeduct;
 
   // --- LOGIC: PROMO CODE ---
   const handleApplyPromo = async () => {
     if (!promoInput.trim()) return;
     setLoading(true);
-    const success = await applyPromoCode(promoInput);
+    const result = await applyPromoCode(promoInput);
     setLoading(false);
     
-    if (success) {
+    if (result.success) {
         setPromoStatus('success');
+        setPromoErrorMsg('');
     } else {
         setPromoStatus('error');
+        setPromoErrorMsg(result.message || 'Неверный код');
     }
   };
 
@@ -64,6 +83,7 @@ const Cart: React.FC = () => {
       removePromoCode();
       setPromoInput('');
       setPromoStatus('idle');
+      setPromoErrorMsg('');
   }
 
   // --- LOGIC: OPTION 1 (TELEGRAM) ---
@@ -75,11 +95,14 @@ const Cart: React.FC = () => {
         message += `${idx + 1}. ${item.name} | Размер: ${item.selectedSize} | x${item.quantity}\n`;
     });
     
-    message += `\n💰 Сумма заказа: ${total.toLocaleString()} ₽`;
-    if (activePromo) {
-        const val = activePromo.discount_value || activePromo.discount_percent;
+    message += `\n💰 Сумма заказа: ${finalTotal.toLocaleString()} ₽`;
+    if (activePromo && discountAmount > 0) {
+        const val = activePromo.discount_value;
         const label = activePromo.discount_type === 'fixed' ? `${val}₽` : `${val}%`;
         message += ` (Промокод: ${activePromo.code} -${label})`;
+    }
+    if (pointsToDeduct > 0) {
+        message += ` (Списано баллов: ${pointsToDeduct})`;
     }
     
     const url = `https://t.me/${botUsername}?text=${encodeURIComponent(message)}`;
@@ -88,7 +111,7 @@ const Cart: React.FC = () => {
 
   // --- LOGIC: OPTION 3 (FULL CHECKOUT) ---
   const handleCheckout = () => {
-    toggleCart(); // Close cart
+    toggleCart(); 
     navigate('/checkout'); // Go to full checkout page
   };
 
@@ -165,6 +188,7 @@ const Cart: React.FC = () => {
                             onChange={(e) => {
                                 setPromoInput(e.target.value);
                                 setPromoStatus('idle');
+                                setPromoErrorMsg('');
                             }}
                             disabled={!!activePromo}
                             className={`w-full bg-zinc-50 border pl-9 pr-4 py-3 font-mono text-sm focus:outline-none uppercase placeholder-zinc-400 ${!!activePromo ? 'border-green-500 text-green-700 bg-green-50' : 'border-zinc-300 focus:border-black'}`}
@@ -188,28 +212,66 @@ const Cart: React.FC = () => {
                     )}
                 </div>
                 {promoStatus === 'success' && activePromo && (
-                    <p className="text-[10px] text-green-600 font-mono mt-1">
-                        СКИДКА ПРИМЕНЕНА: {' '}
-                        {activePromo.discount_type === 'fixed' 
-                            ? `-${activePromo.discount_value} ₽` 
-                            : `-${activePromo.discount_value || activePromo.discount_percent}%`
-                        }
-                    </p>
+                    <div className="mt-1">
+                        {activePromo.min_order_amount > subtotal ? (
+                            <p className="text-[10px] text-orange-600 font-mono">
+                                СУММА КОРЗИНЫ МЕНЬШЕ {activePromo.min_order_amount}₽. СКИДКА НЕАКТИВНА.
+                            </p>
+                        ) : (
+                            <p className="text-[10px] text-green-600 font-mono">
+                                СКИДКА ПРИМЕНЕНА: {' '}
+                                {activePromo.discount_type === 'fixed' 
+                                    ? `-${activePromo.discount_value} ₽` 
+                                    : `-${activePromo.discount_value}%`
+                                }
+                            </p>
+                        )}
+                    </div>
                 )}
-                {promoStatus === 'error' && <p className="text-[10px] text-red-600 font-mono mt-1">НЕВЕРНЫЙ КОД</p>}
+                {promoStatus === 'error' && <p className="text-[10px] text-red-600 font-mono mt-1">{promoErrorMsg}</p>}
             </div>
 
+            {/* POINTS REDEMPTION */}
+            {userPoints > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 p-3 flex justify-between items-center">
+                    <div>
+                        <div className="flex items-center gap-2 font-bold font-jura text-sm text-yellow-800">
+                            <Sparkles size={14} className="fill-yellow-600 text-yellow-600" />
+                            {userPoints} БОНУСОВ
+                        </div>
+                        <p className="text-[10px] text-yellow-700 font-mono">
+                            Доступно для списания: {Math.min(userPoints, maxPointsUsage)}
+                        </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            className="sr-only peer" 
+                            checked={usePoints}
+                            onChange={() => setUsePoints(!usePoints)}
+                        />
+                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-yellow-500"></div>
+                    </label>
+                </div>
+            )}
+
             {/* Totals */}
-            <div className="border-t border-dashed border-zinc-300 pt-4">
-                {activePromo && (
-                    <div className="flex justify-between items-center mb-2 font-mono text-xs text-red-600">
+            <div className="border-t border-dashed border-zinc-300 pt-4 space-y-1">
+                {activePromo && discountAmount > 0 && (
+                    <div className="flex justify-between items-center font-mono text-xs text-red-600">
                         <span>СКИДКА</span>
                         <span>-{discountAmount.toFixed(0)} ₽</span>
                     </div>
                 )}
-                <div className="flex justify-between items-center mb-6 font-jura text-xl font-bold">
+                {usePoints && pointsToDeduct > 0 && (
+                    <div className="flex justify-between items-center font-mono text-xs text-yellow-600 font-bold">
+                        <span>БАЛЛЫ</span>
+                        <span>-{pointsToDeduct} ₽</span>
+                    </div>
+                )}
+                <div className="flex justify-between items-center mt-3 font-jura text-xl font-bold">
                     <span>ИТОГО</span>
-                    <span>{total.toFixed(0)} ₽</span>
+                    <span>{finalTotal.toFixed(0)} ₽</span>
                 </div>
             </div>
 
