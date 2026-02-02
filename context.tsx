@@ -321,8 +321,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
   const loginWithVK = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'vk',
-        options: { redirectTo: window.location.origin }
+        // Меняем 'vk' на 'keycloak', так как в Supabase 
+        // мы использовали этот раздел для настройки VK ID
+        provider: 'keycloak', 
+        options: { 
+            redirectTo: window.location.origin,
+            // Добавим это, чтобы VK запрашивал доступ к email, если это возможно
+            scopes: 'email' 
+        }
     });
     return { error };
   };
