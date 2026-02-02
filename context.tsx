@@ -322,7 +322,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const loginWithVK = () => {
     const client_id = '54438901';
     // CRITICAL: Must point to the new callback page
-    const redirect_uri = encodeURIComponent(window.location.origin + '/vk-callback'); 
+    const redirect_uri = "https://print-project-system.vercel.app/vk-callback"; 
     const scope = 'email'; 
     
     const vkUrl = `https://oauth.vk.com/authorize?client_id=${client_id}&redirect_uri=${redirect_uri}&display=page&scope=${scope}&response_type=code&v=5.131`;
@@ -332,7 +332,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
   const loginWithVKCode = async (code: string) => {
     try {
-        const redirect_uri = window.location.origin + '/vk-callback';
+        const redirect_uri = "https://print-project-system.vercel.app/vk-callback";
         
         const { data, error } = await supabase.functions.invoke('vk-login', {
             body: { code, redirect_uri }
