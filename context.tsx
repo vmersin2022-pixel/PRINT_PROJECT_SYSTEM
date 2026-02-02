@@ -320,14 +320,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   };
 
   const loginWithVK = async () => {
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'gitlab', // Да, пишем gitlab, но сработает VK!
-    options: {
-      redirectTo: window.location.origin,
-      scopes: 'email'
-    }
-  });
-  return { error };
+  const clientId = '54438901';
+  const redirectUri = encodeURIComponent('https://vwspjdsmdxmbzrancyhy.supabase.co/auth/v1/callback');
+  const provider = 'gitlab'; // Оставляем gitlab, так как ключи лежат там
+  
+  // Формируем идеально чистую ссылку для ВК вручную
+  const vkUrl = `https://oauth.vk.com/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=email&provider=${provider}`;
+  
+  window.location.href = vkUrl;
+  return { error: null };
 };
 
   const loginWithTelegram = async (telegramUser: TelegramUser) => {
