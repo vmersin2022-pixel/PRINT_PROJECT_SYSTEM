@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Trash2, ArrowRight, Send, Tag, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -28,7 +29,21 @@ const Cart: React.FC = () => {
   if (!isCartOpen) return null;
 
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const discountAmount = activePromo ? Math.round(subtotal * (activePromo.discount_percent / 100)) : 0;
+  
+  // DISCOUNT CALCULATION LOGIC
+  let discountAmount = 0;
+  if (activePromo) {
+      if (activePromo.discount_type === 'fixed') {
+          discountAmount = activePromo.discount_value;
+      } else {
+          // Fallback to legacy percent if type is missing or 'percent'
+          const value = activePromo.discount_value || activePromo.discount_percent;
+          discountAmount = Math.round(subtotal * (value / 100));
+      }
+  }
+  
+  // Ensure discount doesn't exceed total
+  discountAmount = Math.min(discountAmount, subtotal);
   const total = subtotal - discountAmount;
 
   // --- LOGIC: PROMO CODE ---
@@ -61,7 +76,11 @@ const Cart: React.FC = () => {
     });
     
     message += `\n💰 Сумма заказа: ${total.toLocaleString()} ₽`;
-    if (activePromo) message += ` (Промокод: ${activePromo.code} -${activePromo.discount_percent}%)`;
+    if (activePromo) {
+        const val = activePromo.discount_value || activePromo.discount_percent;
+        const label = activePromo.discount_type === 'fixed' ? `${val}₽` : `${val}%`;
+        message += ` (Промокод: ${activePromo.code} -${label})`;
+    }
     
     const url = `https://t.me/${botUsername}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
@@ -170,7 +189,11 @@ const Cart: React.FC = () => {
                 </div>
                 {promoStatus === 'success' && activePromo && (
                     <p className="text-[10px] text-green-600 font-mono mt-1">
-                        СКИДКА ПРИМЕНЕНА: {activePromo.discount_percent}%
+                        СКИДКА ПРИМЕНЕНА: {' '}
+                        {activePromo.discount_type === 'fixed' 
+                            ? `-${activePromo.discount_value} ₽` 
+                            : `-${activePromo.discount_value || activePromo.discount_percent}%`
+                        }
                     </p>
                 )}
                 {promoStatus === 'error' && <p className="text-[10px] text-red-600 font-mono mt-1">НЕВЕРНЫЙ КОД</p>}

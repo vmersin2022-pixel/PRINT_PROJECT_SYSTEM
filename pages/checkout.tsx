@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context';
 import { useNavigate } from 'react-router-dom';
@@ -33,7 +34,21 @@ const Checkout: React.FC = () => {
 
   // Calculate totals
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const discountAmount = activePromo ? Math.round(subtotal * (activePromo.discount_percent / 100)) : 0;
+  
+  // DISCOUNT CALCULATION LOGIC
+  let discountAmount = 0;
+  if (activePromo) {
+      if (activePromo.discount_type === 'fixed') {
+          discountAmount = activePromo.discount_value;
+      } else {
+          // Fallback to legacy percent if type is missing or 'percent'
+          const value = activePromo.discount_value || activePromo.discount_percent;
+          discountAmount = Math.round(subtotal * (value / 100));
+      }
+  }
+  // Cap discount at subtotal
+  discountAmount = Math.min(discountAmount, subtotal);
+
   const deliveryPrice = deliveryMethod === 'cdek_door' ? 550 : 350;
   const total = subtotal - discountAmount + deliveryPrice;
 

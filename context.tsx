@@ -319,6 +319,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     return { error };
   };
 
+  const loginWithVK = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'vk',
+        options: { redirectTo: window.location.origin }
+    });
+    return { error };
+  };
+
   const loginWithTelegram = async (telegramUser: TelegramUser) => {
       try {
           const { data, error } = await supabase.functions.invoke('telegram-login', {
@@ -551,8 +559,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       localStorage.removeItem('print_project_promo');
   };
 
-  const addPromoCodeDb = async (code: string, percent: number) => {
-      await supabase.from('promocodes').insert([{ code: code.toUpperCase(), discount_percent: percent, is_active: true }]);
+  const addPromoCodeDb = async (code: string, value: number, type: 'percent' | 'fixed') => {
+      // We fill both columns. discount_percent is kept for DB constraint compatibility if any, 
+      // but the app logic will use `discount_value` and `discount_type`.
+      await supabase.from('promocodes').insert([{ 
+          code: code.toUpperCase(), 
+          discount_percent: value, 
+          discount_value: value,
+          discount_type: type,
+          is_active: true 
+      }]);
       await fetchPublicData();
   };
 
@@ -605,6 +621,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       loginWithPassword,
       signupWithPassword,
       loginWithGoogle,
+      loginWithVK,
       loginWithTelegram,
       logout
     }}>

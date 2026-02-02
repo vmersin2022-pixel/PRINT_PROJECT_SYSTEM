@@ -67,7 +67,9 @@ export interface Order {
 export interface PromoCode {
   id: string;
   code: string;
-  discount_percent: number;
+  discount_percent: number; // Kept for legacy compatibility
+  discount_value: number;   // New universal value field
+  discount_type: 'percent' | 'fixed'; // Type of discount
   is_active: boolean;
 }
 
@@ -129,6 +131,7 @@ export interface AppContextType {
   loginWithPassword: (email: string, password: string) => Promise<{ error: any }>;
   signupWithPassword: (email: string, password: string) => Promise<{ data: any; error: any }>;
   loginWithGoogle: () => Promise<{ error: any }>;
+  loginWithVK: () => Promise<{ error: any }>; // NEW: VK Login
   loginWithTelegram: (user: TelegramUser) => Promise<{ error: any }>; // NEW
   logout: () => Promise<void>;
 
@@ -148,7 +151,7 @@ export interface AppContextType {
   // Promocodes
   applyPromoCode: (code: string) => Promise<boolean>;
   removePromoCode: () => void;
-  addPromoCodeDb: (code: string, percent: number) => Promise<void>;
+  addPromoCodeDb: (code: string, value: number, type: 'percent' | 'fixed') => Promise<void>;
   togglePromoCodeDb: (id: string, currentState: boolean) => Promise<void>;
   deletePromoCodeDb: (id: string) => Promise<void>;
 

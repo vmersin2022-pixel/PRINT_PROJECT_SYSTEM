@@ -79,7 +79,12 @@ const Admin: React.FC = () => {
     link: '/catalog'
   });
 
-  const [promoForm, setPromoForm] = useState({ code: '', percent: 10 });
+  // Updated Promo Form State
+  const [promoForm, setPromoForm] = useState<{
+      code: string;
+      value: number;
+      type: 'percent' | 'fixed';
+  }>({ code: '', value: 10, type: 'percent' });
 
   const CATEGORY_LABELS: Record<Category, string> = {
     'fresh_drop': 'СВЕЖИЙ ДРОП',
@@ -261,8 +266,8 @@ const Admin: React.FC = () => {
   const handleAddPromo = async (e: React.FormEvent) => {
       e.preventDefault();
       if(!session) return;
-      await addPromoCodeDb(promoForm.code, promoForm.percent);
-      setPromoForm({ code: '', percent: 10 });
+      await addPromoCodeDb(promoForm.code, promoForm.value, promoForm.type);
+      setPromoForm({ code: '', value: 10, type: 'percent' });
   };
 
   // --- ORDER HELPERS ---
@@ -762,10 +767,32 @@ const Admin: React.FC = () => {
                                 <label className="text-[10px] font-mono text-zinc-400">КОД</label>
                                 <input type="text" className="w-full bg-zinc-50 border border-zinc-200 p-2 font-mono font-bold uppercase" value={promoForm.code} onChange={e => setPromoForm({...promoForm, code: e.target.value})} required />
                             </div>
-                            <div>
-                                <label className="text-[10px] font-mono text-zinc-400">СКИДКА (%)</label>
-                                <input type="number" max="100" min="1" className="w-full bg-zinc-50 border border-zinc-200 p-2 font-mono" value={promoForm.percent} onChange={e => setPromoForm({...promoForm, percent: parseInt(e.target.value)})} required />
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-mono text-zinc-400">ТИП СКИДКИ</label>
+                                    <select 
+                                        className="w-full bg-zinc-50 border border-zinc-200 p-2 font-mono"
+                                        value={promoForm.type}
+                                        onChange={(e) => setPromoForm({...promoForm, type: e.target.value as 'percent' | 'fixed'})}
+                                    >
+                                        <option value="percent">Процент (%)</option>
+                                        <option value="fixed">Рубли (₽)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-mono text-zinc-400">ЗНАЧЕНИЕ</label>
+                                    <input 
+                                        type="number" 
+                                        min="1" 
+                                        className="w-full bg-zinc-50 border border-zinc-200 p-2 font-mono" 
+                                        value={promoForm.value} 
+                                        onChange={e => setPromoForm({...promoForm, value: parseInt(e.target.value)})} 
+                                        required 
+                                    />
+                                </div>
                             </div>
+
                             <FancyButton type="submit" fullWidth variant="solid">ДОБАВИТЬ КОД</FancyButton>
                         </form>
                      </div>
@@ -775,7 +802,15 @@ const Admin: React.FC = () => {
                     <div className="space-y-2">
                         {promocodes.map(promo => (
                             <div key={promo.id} className={`flex justify-between items-center p-4 border ${promo.is_active ? 'bg-white border-black' : 'bg-zinc-100 border-zinc-200 text-zinc-400'}`}>
-                                <div><div className="font-bold font-mono text-lg">{promo.code}</div><div className="text-xs font-mono">{promo.discount_percent}% СКИДКА</div></div>
+                                <div>
+                                    <div className="font-bold font-mono text-lg">{promo.code}</div>
+                                    <div className="text-xs font-mono text-blue-900">
+                                        {promo.discount_type === 'fixed' 
+                                            ? `-${promo.discount_value} ₽` 
+                                            : `-${promo.discount_value || promo.discount_percent}%`
+                                        }
+                                    </div>
+                                </div>
                                 {session && (<div className="flex items-center gap-2"><button onClick={() => togglePromoCodeDb(promo.id, promo.is_active)} className={`px-3 py-1 text-xs font-mono border ${promo.is_active ? 'bg-green-100 text-green-800 border-green-200' : 'bg-zinc-200 text-zinc-500'}`}>{promo.is_active ? 'ON' : 'OFF'}</button><button onClick={() => { if(confirm('Удалить код?')) deletePromoCodeDb(promo.id) }} className="p-2 text-red-600 hover:bg-red-50"><Trash2 size={16}/></button></div>)}
                             </div>
                         ))}
