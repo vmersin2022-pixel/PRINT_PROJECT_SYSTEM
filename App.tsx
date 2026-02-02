@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 
@@ -14,6 +15,7 @@ const AboutPage = lazy(() => import('./pages/about'));
 const Checkout = lazy(() => import('./pages/checkout'));
 const WishlistPage = lazy(() => import('./pages/wishlist'));
 const ProfilePage = lazy(() => import('./pages/profile'));
+const VKCallback = lazy(() => import('./pages/vk-callback'));
 
 import Header from './components/layout/Header';
 import Menu from './components/layout/Menu';
@@ -144,6 +146,8 @@ const App: React.FC = () => {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/service" element={<ServicePage />} />
             <Route path="/service/:slug" element={<ServicePage />} />
+            
+            <Route path="/vk-callback" element={<VKCallback />} />
             
             {/* Modified Catch-All to support Auth Tokens */}
             <Route path="*" element={<AuthRedirectHandler />} />

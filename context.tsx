@@ -319,18 +319,37 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     return { error };
   };
 
-  const loginWithVK = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-        // Меняем 'vk' на 'keycloak', так как в Supabase 
-        // мы использовали этот раздел для настройки VK ID
-        provider: 'keycloak', 
-        options: { 
-            redirectTo: window.location.origin,
-            // Добавим это, чтобы VK запрашивал доступ к email, если это возможно
-            scopes: 'email' 
-        }
-    });
-    return { error };
+  const loginWithVK = () => {
+    const client_id = '54438901';
+    // CRITICAL: Must point to the new callback page
+    const redirect_uri = encodeURIComponent(window.location.origin + '/vk-callback'); 
+    const scope = 'email'; 
+    
+    const vkUrl = `https://oauth.vk.com/authorize?client_id=${client_id}&redirect_uri=${redirect_uri}&display=page&scope=${scope}&response_type=code&v=5.131`;
+    
+    window.location.href = vkUrl;
+  };
+
+  const loginWithVKCode = async (code: string) => {
+    try {
+        const redirect_uri = window.location.origin + '/vk-callback';
+        
+        const { data, error } = await supabase.functions.invoke('vk-login', {
+            body: { code, redirect_uri }
+        });
+        
+        if (error) throw new Error('Failed to invoke VK login function');
+        if (data?.error) throw new Error(data.error);
+        if (!data?.url) throw new Error('No login URL returned');
+
+        // Force redirect to the Magic Link URL returned by function
+        window.location.href = data.url;
+        
+        return { error: null };
+    } catch (err: any) {
+        console.error("VK Login Error:", err);
+        return { error: err };
+    }
   };
 
   const loginWithTelegram = async (telegramUser: TelegramUser) => {
@@ -628,6 +647,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       signupWithPassword,
       loginWithGoogle,
       loginWithVK,
+      loginWithVKCode,
       loginWithTelegram,
       logout
     }}>

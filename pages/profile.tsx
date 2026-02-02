@@ -27,8 +27,8 @@ const ProfilePage: React.FC = () => {
 
   const handleVKLogin = async () => {
       setLoading(true);
-      const { error } = await loginWithVK();
-      if (error) setMessage({ type: 'error', text: error.message });
+      loginWithVK();
+      // VK login initiates a redirect, so we don't handle errors here.
   };
 
   // NEW: Deep Link Handler

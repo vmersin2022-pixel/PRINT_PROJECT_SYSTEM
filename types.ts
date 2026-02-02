@@ -131,8 +131,9 @@ export interface AppContextType {
   loginWithPassword: (email: string, password: string) => Promise<{ error: any }>;
   signupWithPassword: (email: string, password: string) => Promise<{ data: any; error: any }>;
   loginWithGoogle: () => Promise<{ error: any }>;
-  loginWithVK: () => Promise<{ error: any }>; // NEW: VK Login
-  loginWithTelegram: (user: TelegramUser) => Promise<{ error: any }>; // NEW
+  loginWithVK: () => void; // Initiates redirect
+  loginWithVKCode: (code: string) => Promise<{ error: any }>; // Handles callback
+  loginWithTelegram: (user: TelegramUser) => Promise<{ error: any }>;
   logout: () => Promise<void>;
 
   // Products
