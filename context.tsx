@@ -21,7 +21,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const [isSessionLoading, setIsSessionLoading] = useState(true); // START AS TRUE
   
   // New State
-  const [orders, setOrders] = useState<Order[]>([]); // Admin View
+  const [orders, setOrders] = useState<Order[]>([]); // Admin View (Deprecated for direct access, used via components now)
   const [userOrders, setUserOrders] = useState<Order[]>([]); // Personal Cabinet View
   const [promocodes, setPromocodes] = useState<PromoCode[]>([]);
   const [activePromo, setActivePromo] = useState<PromoCode | null>(null);
@@ -58,7 +58,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   };
 
   // --- 1. FETCH PUBLIC DATA (PRODUCTS, COLLECTIONS) ---
-  // Only runs once on mount, or when explicitly requested (e.g. admin updates)
   const fetchPublicData = async () => {
       try {
           const productPromise = supabase.from('products').select('*');
@@ -96,17 +95,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
           if (promoRes.data) setPromocodes(promoRes.data as PromoCode[]);
       } catch (err: any) {
-          // Ignore AbortError which happens during rapid auth redirects
           if (err.name === 'AbortError' || err.message?.includes('aborted')) return;
           console.error("Fetch Public Data Error:", err);
       }
   };
 
   // --- 2. FETCH USER PRIVATE DATA ---
-  // Runs when user logs in
   const fetchUserData = async (currentUser: User) => {
       try {
-          // A. Fetch User Profile (Cart & Wishlist Sync)
           const { data: profile } = await supabase
               .from('profiles')
               .select('current_cart, favorites')
@@ -114,7 +110,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
               .single();
 
           if (profile) {
-              // Priority: DB State overwrites Local State on Login
               if (profile.current_cart && Array.isArray(profile.current_cart) && profile.current_cart.length > 0) {
                   setCart(profile.current_cart as CartItem[]);
               }
@@ -123,7 +118,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
               }
           }
 
-          // B. Fetch User's personal orders
           const { data: personalOrders, error: personalError } = await supabase
               .from('orders')
               .select('*')
@@ -133,23 +127,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           if (!personalError && personalOrders) {
               setUserOrders(personalOrders as Order[]);
           }
-
-          // C. Fetch Admin Data (Try to fetch all orders)
-          const { data: allOrders, error: orderError } = await supabase
-              .from('orders')
-              .select('*')
-              .order('created_at', { ascending: false });
           
-          if (!orderError && allOrders) {
-              setOrders(allOrders as Order[]);
-              
-              // If successful (Admin), try fetching users
-              const { data: userData } = await supabase
-                  .from('profiles')
-                  .select('*')
-                  .order('created_at', { ascending: false });
-              if (userData) setAllUsers(userData as UserProfile[]);
-          }
+          // NOTE: We do NOT fetch all orders here anymore for Admin scalability.
+          // Admin components will fetch their own data.
       } catch (err: any) {
           if (err.name === 'AbortError' || err.message?.includes('aborted')) return;
           console.error("Fetch User Data Error:", err);
@@ -160,10 +140,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       setUserOrders([]);
       setOrders([]);
       setAllUsers([]);
-      // Do not clear cart/wishlist here immediately, let session handle it
   }
 
-  // Wrapper for manual refresh from Admin panel
   const refreshData = async () => {
       await fetchPublicData();
       const { data: { session } } = await supabase.auth.getSession();
@@ -173,11 +151,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   };
 
   // --- 3. SYNC CART TO SUPABASE (DEBOUNCED) ---
-  // This effect listens to 'cart' changes. 
-  // If user is logged in, it updates the DB after 2 seconds of inactivity.
   useEffect(() => {
-      if (!user) return; // Only sync for logged in users
-
+      if (!user) return;
       const syncCartToDb = async () => {
           try {
               await supabase.from('profiles').update({
@@ -188,15 +163,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
               console.error("Failed to sync cart", e);
           }
       };
-
-      const timeoutId = setTimeout(syncCartToDb, 2000); // 2 second debounce
+      const timeoutId = setTimeout(syncCartToDb, 2000); 
       return () => clearTimeout(timeoutId);
   }, [cart, user]);
 
   // --- 4. SYNC WISHLIST TO SUPABASE (DEBOUNCED) ---
   useEffect(() => {
       if (!user) return;
-
       const syncWishlistToDb = async () => {
           try {
               await supabase.from('profiles').update({
@@ -206,7 +179,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
               console.error("Failed to sync wishlist", e);
           }
       };
-
       const timeoutId = setTimeout(syncWishlistToDb, 2000);
       return () => clearTimeout(timeoutId);
   }, [wishlist, user]);
@@ -215,15 +187,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   // --- INITIALIZATION EFFECT ---
   useEffect(() => {
     let mounted = true;
-
     const init = async () => {
         await fetchPublicData();
-        
         const isHashAuth = window.location.hash && (
             window.location.hash.includes('access_token') || 
             window.location.hash.includes('type=magiclink')
         );
-
         if (!isHashAuth) {
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user && mounted) {
@@ -233,12 +202,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             if (mounted) setIsSessionLoading(false); 
         } 
     };
-
     init();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
-
       if (event === 'SIGNED_IN' && session) {
           setUser(session.user);
           setTimeout(async () => {
@@ -247,11 +213,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                  setIsSessionLoading(false);
              }
           }, 500); 
-
       } else if (event === 'SIGNED_OUT') {
           setUser(null);
           clearUserData();
-          // Optionally clear cart on logout, but usually keeping it in local storage is better UX
           setIsSessionLoading(false);
       } else if (event === 'INITIAL_SESSION') {
           if (session) {
@@ -261,21 +225,17 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           setIsSessionLoading(false);
       }
     });
-
-    // Load Wishlist from LocalStorage (Fallback for guests)
-    // Note: If user logs in, fetchUserData will overwrite this
     if (!user) {
         const savedWishlist = localStorage.getItem('print_project_wishlist');
         if (savedWishlist) {
             try { setWishlist(JSON.parse(savedWishlist)); } catch (e) {}
         }
     }
-
     return () => {
         mounted = false;
         subscription.unsubscribe();
     };
-  }, []); // Intentionally empty dependency array
+  }, []);
 
   // --- AUTO-APPLY SAVED PROMO ---
   useEffect(() => {
@@ -319,39 +279,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     return { error };
   };
 
-  const loginWithVK = () => {
-    const client_id = '54438901';
-    // CRITICAL: Must point to the new callback page
-    const redirect_uri = "https://print-project-system.vercel.app/vk-callback"; 
-    const scope = 'email'; 
-    
-    const vkUrl = `https://oauth.vk.com/authorize?client_id=${client_id}&redirect_uri=${redirect_uri}&display=page&scope=${scope}&response_type=code&v=5.131`;
-    
-    window.location.href = vkUrl;
-  };
-
-  const loginWithVKCode = async (code: string) => {
-    try {
-        const redirect_uri = "https://print-project-system.vercel.app/vk-callback";
-        
-        const { data, error } = await supabase.functions.invoke('vk-login', {
-            body: { code, redirect_uri }
-        });
-        
-        if (error) throw new Error('Failed to invoke VK login function');
-        if (data?.error) throw new Error(data.error);
-        if (!data?.url) throw new Error('No login URL returned');
-
-        // Force redirect to the Magic Link URL returned by function
-        window.location.href = data.url;
-        
-        return { error: null };
-    } catch (err: any) {
-        console.error("VK Login Error:", err);
-        return { error: err };
-    }
-  };
-
   const loginWithTelegram = async (telegramUser: TelegramUser) => {
       try {
           const { data, error } = await supabase.functions.invoke('telegram-login', {
@@ -367,30 +294,45 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       }
   };
 
+  const loginWithVKCode = async (code: string) => {
+      try {
+          const { data, error } = await supabase.functions.invoke('vk-login', {
+              body: { 
+                  code,
+                  redirect_uri: window.location.origin + '/vk-callback'
+              }
+          });
+          if (error) throw error;
+          if (data?.error) throw new Error(data.error);
+          if (data?.url) {
+              window.location.href = data.url;
+          }
+          return { error: null };
+      } catch (err: any) {
+          return { error: err };
+      }
+  };
+
   const logout = async () => {
       setUser(null);
       clearUserData();
-      setCart([]); // Clear cart on logout
+      setCart([]);
       setWishlist([]);
       localStorage.removeItem('print_project_wishlist');
       try { await supabase.auth.signOut(); } catch (e) { console.error("SignOut error:", e); }
       navigate('/', { replace: true });
   };
 
-  // --- WISHLIST ---
   const toggleWishlist = (productId: string) => {
       setWishlist(prev => {
           const newState = prev.includes(productId) 
             ? prev.filter(id => id !== productId)
             : [...prev, productId];
-          
-          // Save to local storage for guests
           localStorage.setItem('print_project_wishlist', JSON.stringify(newState));
           return newState;
       });
   };
 
-  // --- HELPER: Prepare Payload ---
   const prepareProductForDb = (product: Product) => {
       const dbProduct: any = { ...product };
       if (product.categories && product.categories.length > 0) {
@@ -411,7 +353,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const addProduct = async (product: Product, variants: {size: string, stock: number}[]) => {
     const dbPayload = prepareProductForDb(product);
     const { error } = await supabase.from('products').insert([dbPayload]);
-    
     if (!error) {
         if (variants && variants.length > 0) {
             const variantsPayload = variants.map(v => ({
@@ -421,18 +362,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             }));
             await supabase.from('product_variants').insert(variantsPayload);
         }
-        await fetchPublicData(); // Only refresh public data
+        await fetchPublicData();
     }
   };
 
   const updateProduct = async (id: string, updates: Partial<Product>, variants?: {size: string, stock: number}[]) => {
     const existing = products.find(p => p.id === id);
     if (!existing) return;
-
     const merged = { ...existing, ...updates };
     const dbPayload = prepareProductForDb(merged);
     const { error } = await supabase.from('products').update(dbPayload).eq('id', id);
-
     if (!error && variants) {
         await supabase.from('product_variants').delete().eq('product_id', id);
         const variantsPayload = variants.map(v => ({
@@ -452,7 +391,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     if (!error) await fetchPublicData();
   };
 
-  // --- COLLECTIONS CRUD ---
   const addCollection = async (collection: Collection) => {
     const newCollection = { ...collection, link: collection.link || `/catalog?collection=${collection.id}` };
     const { error } = await supabase.from('collections').upsert([newCollection]);
@@ -471,7 +409,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         alert(`Извините, доступно только ${variant.stock} шт. размера ${size}`);
         return;
     }
-
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id && item.selectedSize === size);
       if (existing && variant) {
@@ -500,23 +437,54 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     setCart([]);
     setActivePromo(null);
     localStorage.removeItem('print_project_promo');
-    
-    // Clear from DB if logged in
     if (user) {
         await supabase.from('profiles').update({ current_cart: [] }).eq('id', user.id);
     }
   }
 
-  // --- ORDERS LOGIC (WITH INVENTORY UPDATE) ---
+  // --- ORDERS LOGIC (SECURED) ---
   const createOrder = async (orderData: Omit<Order, 'id' | 'created_at'>) => {
-      // 0. Get Current Session User
       const { data: { session } } = await supabase.auth.getSession();
       const currentUserId = session?.user?.id || null;
 
-      // 1. Create the Order with user_id attached
+      // 1. RE-VERIFY PRICES AND STOCK SERVER-SIDE (Simulated here via fresh fetch)
+      // We fetch products directly from DB to ensure prices are not spoofed
+      const { data: dbProducts } = await supabase.from('products').select('id, price');
+      
+      let verifiedSubtotal = 0;
+      const verifiedItems = orderData.order_items.map(item => {
+          const dbItem = dbProducts?.find(p => p.id === item.id);
+          const realPrice = dbItem ? dbItem.price : item.price;
+          verifiedSubtotal += realPrice * item.quantity;
+          return { ...item, price: realPrice }; // Update with real price
+      });
+
+      // 2. Re-calculate Promo
+      let discountAmount = 0;
+      if (activePromo) {
+          if (activePromo.discount_type === 'fixed') {
+              discountAmount = activePromo.discount_value;
+          } else {
+              const value = activePromo.discount_value || activePromo.discount_percent;
+              discountAmount = Math.round(verifiedSubtotal * (value / 100));
+          }
+      }
+      discountAmount = Math.min(discountAmount, verifiedSubtotal);
+      
+      // Fixed delivery costs (could also be fetched from config)
+      const deliveryPrice = orderData.customer_info.deliveryMethod === 'cdek_door' ? 550 : 350;
+      const verifiedTotal = verifiedSubtotal - discountAmount + deliveryPrice;
+
+      // 3. Create Payload
       const payload = {
           ...orderData,
-          user_id: currentUserId, // CRITICAL: Link order to user
+          total_price: verifiedTotal, // Override with verified total
+          order_items: verifiedItems, // Override with verified items
+          user_id: currentUserId,
+          customer_info: {
+              ...orderData.customer_info,
+              discountAmount: discountAmount // Save calculated discount for history
+          }
       };
 
       const { error: orderError } = await supabase.from('orders').insert([payload]);
@@ -527,7 +495,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           return false;
       }
 
-      // 2. Decrement Stock for each item
+      // 4. Decrement Stock
       for (const item of orderData.order_items) {
           const variant = products
               .find(p => p.id === item.id)
@@ -542,12 +510,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           }
       }
 
-      // 3. Clear Database Cart after successful order (if user exists)
       if (currentUserId) {
           await supabase.from('profiles').update({ current_cart: [] }).eq('id', currentUserId);
       }
 
-      // 4. Refresh Data
       await fetchPublicData();
       if (session?.user) {
           await fetchUserData(session.user);
@@ -558,7 +524,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
   const updateOrderStatus = async (id: string, status: OrderStatus) => {
       const { error } = await supabase.from('orders').update({ status }).eq('id', id);
-      if (!error && user) await fetchUserData(user);
+      if (!error && user) await fetchUserData(user); // Only fetch user orders, admin handles its own
   };
 
   // --- PROMOCODES LOGIC ---
@@ -569,11 +535,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         .select('*')
         .eq('code', cleanCode)
         .single();
-      
       if (error || !data || !data.is_active) {
           return false;
       }
-      
       setActivePromo(data as PromoCode);
       localStorage.setItem('print_project_promo', cleanCode);
       return true;
@@ -585,8 +549,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   };
 
   const addPromoCodeDb = async (code: string, value: number, type: 'percent' | 'fixed') => {
-      // We fill both columns. discount_percent is kept for DB constraint compatibility if any, 
-      // but the app logic will use `discount_value` and `discount_type`.
       await supabase.from('promocodes').insert([{ 
           code: code.toUpperCase(), 
           discount_percent: value, 
@@ -606,7 +568,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       await supabase.from('promocodes').delete().eq('id', id);
       await fetchPublicData();
   };
-
 
   return (
     <AppContext.Provider value={{
@@ -646,9 +607,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       loginWithPassword,
       signupWithPassword,
       loginWithGoogle,
-      loginWithVK,
-      loginWithVKCode,
       loginWithTelegram,
+      loginWithVKCode,
       logout
     }}>
       {children}

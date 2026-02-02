@@ -144,10 +144,9 @@ const App: React.FC = () => {
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/wishlist" element={<WishlistPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/vk-callback" element={<VKCallback />} />
             <Route path="/service" element={<ServicePage />} />
             <Route path="/service/:slug" element={<ServicePage />} />
-            
-            <Route path="/vk-callback" element={<VKCallback />} />
             
             {/* Modified Catch-All to support Auth Tokens */}
             <Route path="*" element={<AuthRedirectHandler />} />

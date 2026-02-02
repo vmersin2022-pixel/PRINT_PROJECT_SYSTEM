@@ -1,3 +1,4 @@
+
 import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, MoveRight, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -25,8 +26,10 @@ const Home: React.FC = () => {
   // Generic scroll handler
   const scroll = (ref: React.RefObject<HTMLDivElement>, direction: 'left' | 'right') => {
     if (ref.current) {
-        // Scroll amount increased to match the large card width (400px + gap)
-        const scrollAmount = 450; 
+        // Adjust scroll amount based on card width
+        // Collections: 400px card + 24px gap ~ 424px -> scroll 450
+        // Products: 300px card + 24px gap ~ 324px -> scroll 340
+        const scrollAmount = ref === collectionsScrollRef ? 450 : 340; 
         ref.current.scrollBy({
             left: direction === 'right' ? scrollAmount : -scrollAmount,
             behavior: 'smooth'
@@ -154,7 +157,7 @@ const Home: React.FC = () => {
              <div className="hidden md:block absolute -top-4 -left-4 w-8 h-8 border-l-2 border-t-2 border-zinc-200" />
              <div className="hidden md:block absolute -top-4 -right-4 w-8 h-8 border-r-2 border-t-2 border-zinc-200" />
 
-             {/* SCROLLABLE CONTAINER FOR PRODUCTS - Updated to match Collections style */}
+             {/* SCROLLABLE CONTAINER FOR PRODUCTS - Resized to be smaller (300px) */}
              <div 
                 ref={productsScrollRef}
                 className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide scroll-smooth"
@@ -164,9 +167,9 @@ const Home: React.FC = () => {
                 <Link 
                   key={product.id} 
                   to={`/product/${product.id}`}
-                  className="group relative min-w-[85vw] md:min-w-[400px] snap-center block flex flex-col h-full"
+                  className="group relative min-w-[70vw] md:min-w-[300px] snap-center block flex flex-col h-full"
                 >
-                  {/* Card Image Container with Frames - SAME AS COLLECTIONS */}
+                  {/* Card Image Container with Frames - SAME AS COLLECTIONS but smaller */}
                   <div className="aspect-[3/4] border border-zinc-300 p-1 relative overflow-hidden bg-white/50 backdrop-blur-sm group-hover:border-blue-600 transition-colors shadow-sm group-hover:shadow-lg">
                     <div className="w-full h-full overflow-hidden relative">
                       <img 
@@ -196,7 +199,7 @@ const Home: React.FC = () => {
                   {/* Text Details Below */}
                   <div className="mt-4 flex justify-between items-start border-b border-zinc-300 pb-2 group-hover:border-blue-600 transition-colors">
                     <div>
-                      <h3 className="font-jura text-2xl font-bold uppercase text-black group-hover:text-blue-600 transition-colors">
+                      <h3 className="font-jura text-xl font-bold uppercase text-black group-hover:text-blue-600 transition-colors">
                         {product.name}
                       </h3>
                       <p className="font-mono text-xs text-zinc-500 mt-1">

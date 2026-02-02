@@ -1,9 +1,10 @@
+
 import React, { useState, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Product, Category } from '../../types';
 import { getImageUrl } from '../../utils';
 import { useApp } from '../../context';
-import { Heart } from 'lucide-react';
+import { Heart, Play } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
@@ -21,26 +22,31 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const { wishlist, toggleWishlist } = useApp();
   const [currentIdx, setCurrentIdx] = useState(0);
   const intervalRef = useRef<any>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const isLiked = wishlist.includes(product.id);
 
-  // Generate a more random/chaotic number based on UUID hash
+  // Generate a random-looking purchase count based on ID hash
   const purchasedCount = useMemo(() => {
     let hash = 0;
     for (let i = 0; i < product.id.length; i++) {
         hash = ((hash << 5) - hash) + product.id.charCodeAt(i);
         hash |= 0;
     }
-    // Result range approx 42 to 940
     return Math.abs(hash % 898) + 42; 
   }, [product.id]);
 
   const handleMouseEnter = () => {
+    // If we have multiple images, cycle through them
     if (product.images.length > 1) {
-      setCurrentIdx(1);
+      // Start slightly delayed to prevent flickering on fast scroll
       intervalRef.current = setInterval(() => {
         setCurrentIdx((prev) => (prev + 1) % product.images.length);
-      }, 1000);
+      }, 1200);
+    }
+    // If it's a video, ensure it plays
+    if (videoRef.current) {
+        videoRef.current.play().catch(() => {});
     }
   };
 
@@ -50,17 +56,21 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       intervalRef.current = null;
     }
     setCurrentIdx(0);
+    if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+    }
   };
 
-  // Prevent link navigation when clicking heart
   const handleLike = (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       toggleWishlist(product.id);
   };
 
-  const currentImageSrc = product.images[currentIdx] || product.images[0];
-  const optimizedImageSrc = getImageUrl(currentImageSrc, 500);
+  const currentMediaSrc = product.images[currentIdx] || product.images[0];
+  const isVideo = (url: string) => url?.match(/\.(mp4|webm|mov)$/i);
+  const isCurrentVideo = isVideo(currentMediaSrc);
 
   return (
     <Link 
@@ -69,34 +79,49 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Glassmorphism Card Container - RAL 5009 SHADOW */}
+      {/* Container with Tech Border Effect */}
       <div className="relative w-full aspect-[3/4] overflow-hidden bg-white/40 backdrop-blur-md border border-white/50 shadow-sm group-hover:shadow-[0_0_25px_rgba(46,89,132,0.3)] group-hover:border-blue-600 transition-all duration-300 mb-4 shrink-0">
         
-        {/* Main Image Display */}
+        {/* Main Media Display */}
         <div className="w-full h-full p-2">
-            <div className="w-full h-full relative overflow-hidden bg-zinc-50/50">
-                 <img 
-                    src={optimizedImageSrc} 
-                    alt={product.name}
-                    loading="lazy"
-                    className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 scale-95 group-hover:scale-100" 
-                 />
+            <div className="w-full h-full relative overflow-hidden bg-zinc-100">
+                 {isCurrentVideo ? (
+                     <video
+                        ref={videoRef}
+                        src={currentMediaSrc}
+                        muted
+                        loop
+                        playsInline
+                        className="w-full h-full object-cover scale-105 group-hover:scale-110 transition-transform duration-700"
+                     />
+                 ) : (
+                     <img 
+                        src={getImageUrl(currentMediaSrc, 500)} 
+                        alt={product.name}
+                        loading="lazy"
+                        className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 scale-95 group-hover:scale-100" 
+                     />
+                 )}
                  
-                 {/* Tech Grid Overlay on Image - RAL 5009 */}
+                 {/* Video Indicator Icon if not playing */}
+                 {isCurrentVideo && currentIdx === 0 && (
+                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-white/20 backdrop-blur rounded-full flex items-center justify-center border border-white/50 opacity-80 group-hover:opacity-0 transition-opacity">
+                         <Play size={16} className="text-white fill-white ml-1" />
+                     </div>
+                 )}
+
+                 {/* Tech Grid Overlay - RAL 5009 */}
                  <div className="absolute inset-0 bg-[linear-gradient(rgba(46,89,132,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(46,89,132,0.1)_1px,transparent_1px)] bg-[size:20px_20px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none mix-blend-overlay" />
-                 
-                 {/* White Glow Flash on Hover */}
-                 <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 mix-blend-soft-light pointer-events-none" />
             </div>
         </div>
         
         {/* Progress Dots */}
         {product.images.length > 1 && (
             <div className="absolute bottom-14 left-0 right-0 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
-                {product.images.map((_, idx) => (
+                {product.images.map((img, idx) => (
                     <div 
                         key={idx} 
-                        className={`w-1 h-1 rounded-sm ${idx === currentIdx ? 'bg-blue-600' : 'bg-zinc-300'}`}
+                        className={`w-1 h-1 rounded-sm transition-colors ${idx === currentIdx ? 'bg-blue-600' : 'bg-zinc-300'}`}
                     />
                 ))}
             </div>
