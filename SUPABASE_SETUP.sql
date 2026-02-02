@@ -84,6 +84,9 @@ FROM public.profiles p
 LEFT JOIN public.orders o ON p.id = o.user_id
 GROUP BY p.id;
 
+-- Ensure permissions for the view
+GRANT SELECT ON public.customer_segments TO anon, authenticated, service_role;
+
 -- 7. HEADLESS CMS CONFIG (NEW)
 -- Таблица для глобальных настроек сайта. Всегда одна строка ID=1.
 CREATE TABLE IF NOT EXISTS public.site_config (

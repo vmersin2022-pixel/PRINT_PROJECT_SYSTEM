@@ -8,6 +8,7 @@ const AdminUsers: React.FC = () => {
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
     
     // CRM State
     const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
@@ -23,15 +24,36 @@ const AdminUsers: React.FC = () => {
     // CHANGED: Fetch from View 'customer_segments' instead of Table 'profiles'
     const fetchUsers = async () => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from('customer_segments') // USE VIEW
-            .select('*')
-            .order('created_at', { ascending: false });
+        setErrorMsg(null);
+        
+        try {
+            // Try fetching from the VIEW first
+            const { data, error } = await supabase
+                .from('customer_segments') // USE VIEW
+                .select('*')
+                .order('created_at', { ascending: false });
             
-        if (!error && data) {
-            setUsers(data as UserProfile[]);
+            if (error) {
+                // If view doesn't exist (404/PGRST error), likely user didn't run SQL.
+                console.error("View Fetch Error:", error);
+                throw new Error("Не удалось загрузить сегменты клиентов. Убедитесь, что SQL View 'customer_segments' создан в Supabase.");
+            }
+
+            if (data) {
+                setUsers(data as UserProfile[]);
+            }
+        } catch (e: any) {
+            console.error("CRM Load Error:", e);
+            setErrorMsg(e.message);
+            
+            // FALLBACK: Try fetching raw profiles if view fails, so admin isn't empty
+            const { data: profiles } = await supabase.from('profiles').select('*');
+            if (profiles) {
+                setUsers(profiles as UserProfile[]);
+            }
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     useEffect(() => {
@@ -183,6 +205,12 @@ const AdminUsers: React.FC = () => {
                 </div>
             </div>
 
+            {errorMsg && (
+                <div className="bg-red-50 border border-red-200 p-4 text-xs font-mono text-red-700">
+                    <strong>ВНИМАНИЕ:</strong> {errorMsg}
+                </div>
+            )}
+
             <div className="bg-white border border-black overflow-hidden">
                 <table className="w-full text-left">
                     <thead className="bg-zinc-100 font-mono text-xs uppercase text-zinc-500 border-b border-zinc-200">
@@ -195,51 +223,57 @@ const AdminUsers: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100 text-sm">
-                        {filtered.map(u => (
-                            <tr 
-                                key={u.id} 
-                                onClick={() => handleUserClick(u)}
-                                className={`cursor-pointer transition-colors ${selectedUser?.id === u.id ? 'bg-blue-50' : 'hover:bg-zinc-50'} ${u.is_blocked ? 'opacity-50 grayscale' : ''}`}
-                            >
-                                <td className="p-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center overflow-hidden border border-zinc-200 relative">
-                                            {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover"/> : <User size={18} className="text-zinc-400"/>}
-                                            {u.is_blocked && <div className="absolute inset-0 bg-red-500/50 flex items-center justify-center"><Ban size={16} className="text-white"/></div>}
-                                        </div>
-                                        <div>
-                                            <div className="font-bold flex items-center gap-2">
-                                                {u.full_name || 'Без имени'}
-                                                {u.role === 'admin' && <Shield size={12} className="text-blue-600"/>}
+                        {loading ? (
+                            <tr><td colSpan={5} className="p-8 text-center text-zinc-400">Загрузка данных...</td></tr>
+                        ) : filtered.length === 0 ? (
+                            <tr><td colSpan={5} className="p-8 text-center text-zinc-400">Клиенты не найдены</td></tr>
+                        ) : (
+                            filtered.map(u => (
+                                <tr 
+                                    key={u.id} 
+                                    onClick={() => handleUserClick(u)}
+                                    className={`cursor-pointer transition-colors ${selectedUser?.id === u.id ? 'bg-blue-50' : 'hover:bg-zinc-50'} ${u.is_blocked ? 'opacity-50 grayscale' : ''}`}
+                                >
+                                    <td className="p-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center overflow-hidden border border-zinc-200 relative">
+                                                {u.avatar_url ? <img src={u.avatar_url} className="w-full h-full object-cover"/> : <User size={18} className="text-zinc-400"/>}
+                                                {u.is_blocked && <div className="absolute inset-0 bg-red-500/50 flex items-center justify-center"><Ban size={16} className="text-white"/></div>}
                                             </div>
-                                            <div className="font-mono text-xs text-zinc-400 flex items-center gap-1"><Mail size={10}/> {u.email}</div>
+                                            <div>
+                                                <div className="font-bold flex items-center gap-2">
+                                                    {u.full_name || 'Без имени'}
+                                                    {u.role === 'admin' && <Shield size={12} className="text-blue-600"/>}
+                                                </div>
+                                                <div className="font-mono text-xs text-zinc-400 flex items-center gap-1"><Mail size={10}/> {u.email}</div>
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td className="p-4 text-center">
-                                    <div className="flex flex-col items-center gap-1">
-                                        {renderSegmentBadge(u.segment)}
-                                        {u.segment === 'churn' && (
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); handleWinBack(u); }}
-                                                className="text-[9px] font-bold text-blue-600 hover:underline flex items-center gap-1 mt-1"
-                                            >
-                                                <HeartHandshake size={10}/> ВЕРНУТЬ
-                                            </button>
-                                        )}
-                                    </div>
-                                </td>
-                                <td className="p-4 text-center font-mono">
-                                    {u.total_spent ? u.total_spent.toLocaleString() : 0} ₽
-                                </td>
-                                <td className="p-4 text-center">
-                                    {u.notes && <StickyNote size={16} className="text-yellow-500 inline fill-yellow-100"/>}
-                                </td>
-                                <td className="p-4 text-right font-mono text-xs text-zinc-500">
-                                    {u.last_order_date ? new Date(u.last_order_date).toLocaleDateString() : '-'}
-                                </td>
-                            </tr>
-                        ))}
+                                    </td>
+                                    <td className="p-4 text-center">
+                                        <div className="flex flex-col items-center gap-1">
+                                            {renderSegmentBadge(u.segment)}
+                                            {u.segment === 'churn' && (
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); handleWinBack(u); }}
+                                                    className="text-[9px] font-bold text-blue-600 hover:underline flex items-center gap-1 mt-1"
+                                                >
+                                                    <HeartHandshake size={10}/> ВЕРНУТЬ
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="p-4 text-center font-mono">
+                                        {u.total_spent ? u.total_spent.toLocaleString() : 0} ₽
+                                    </td>
+                                    <td className="p-4 text-center">
+                                        {u.notes && <StickyNote size={16} className="text-yellow-500 inline fill-yellow-100"/>}
+                                    </td>
+                                    <td className="p-4 text-right font-mono text-xs text-zinc-500">
+                                        {u.last_order_date ? new Date(u.last_order_date).toLocaleDateString() : '-'}
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>

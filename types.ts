@@ -3,8 +3,6 @@ import { User } from '@supabase/supabase-js';
 
 export type Category = 't-shirts' | 'sets' | 'accessories' | 'fresh_drop' | 'last_drop';
 
-// ... (Existing Interfaces: ProductVariant, Product, Collection, CartItem, OrderStatus, Order, PromoCode, UserProfile, TelegramUser) ...
-
 export interface ProductVariant {
   id: string;
   product_id: string;
