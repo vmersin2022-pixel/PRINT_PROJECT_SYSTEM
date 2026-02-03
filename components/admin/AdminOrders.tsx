@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { Order, OrderStatus } from '../../types';
-import { Eye, RefreshCcw, Search, ChevronLeft, ChevronRight, X, Printer, Users, MapPin, Truck, Save, CheckSquare, Square, Box, FileText, CheckCircle, LayoutTemplate, List, AlertCircle, Flame, Clock } from 'lucide-react';
+import { Eye, RefreshCcw, Search, ChevronLeft, ChevronRight, X, Printer, Users, MapPin, Truck, Save, CheckSquare, Square, Box, FileText, CheckCircle, LayoutTemplate, List, AlertCircle, Flame, Clock, Inbox } from 'lucide-react';
+import { formatPrice, formatDate } from '../../utils';
 
 const PAGE_SIZE = 50; // Increased for Kanban visibility
 const NOTIFICATION_SOUND_URL = "https://www.myinstants.com/media/sounds/cash-register-ka-ching.mp3";
@@ -135,6 +136,17 @@ const AdminOrders: React.FC = () => {
   const handleDragStart = (e: React.DragEvent, orderId: string) => {
       setDraggedOrderId(orderId);
       e.dataTransfer.effectAllowed = 'move';
+      // Make dragged element transparent
+      if (e.target instanceof HTMLElement) {
+          e.target.style.opacity = '0.5';
+      }
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+      setDraggedOrderId(null);
+      if (e.target instanceof HTMLElement) {
+          e.target.style.opacity = '1';
+      }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -236,72 +248,83 @@ const AdminOrders: React.FC = () => {
 
         {/* --- VIEW: KANBAN --- */}
         {viewMode === 'kanban' && (
-            <div className="flex-1 overflow-x-auto overflow-y-hidden">
+            <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar">
                 <div className="flex gap-4 h-full min-w-[1000px] px-1">
-                    {KANBAN_COLUMNS.map(col => (
-                        <div 
-                            key={col.id} 
-                            className={`flex-1 flex flex-col bg-zinc-50 border border-zinc-200 min-w-[300px] ${col.color}`}
-                            onDragOver={handleDragOver}
-                            onDrop={(e) => handleDrop(e, col.id)}
-                        >
-                            {/* Column Header */}
-                            <div className="p-4 border-b border-zinc-200 bg-white sticky top-0 z-10 flex justify-between items-center">
-                                <span className="font-jura font-bold text-sm uppercase">{col.label}</span>
-                                <span className="text-[10px] font-mono bg-zinc-100 px-2 py-1 rounded-full">
-                                    {orders.filter(o => col.statuses.includes(o.status)).length}
-                                </span>
+                    {KANBAN_COLUMNS.map(col => {
+                        const columnOrders = orders
+                            .filter(o => col.statuses.includes(o.status))
+                            .sort((a, b) => calculateScore(b).score - calculateScore(a).score);
+
+                        return (
+                            <div 
+                                key={col.id} 
+                                className={`flex-1 flex flex-col bg-zinc-50 border border-zinc-200 min-w-[300px] ${col.color}`}
+                                onDragOver={handleDragOver}
+                                onDrop={(e) => handleDrop(e, col.id)}
+                            >
+                                {/* Column Header */}
+                                <div className="p-4 border-b border-zinc-200 bg-white sticky top-0 z-10 flex justify-between items-center">
+                                    <span className="font-jura font-bold text-sm uppercase">{col.label}</span>
+                                    <span className="text-[10px] font-mono bg-zinc-100 px-2 py-1 rounded-full border border-zinc-200">
+                                        {columnOrders.length}
+                                    </span>
+                                </div>
+
+                                {/* Column Body */}
+                                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                                    {columnOrders.length === 0 ? (
+                                        <div className="h-32 border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center text-zinc-300">
+                                            <Inbox size={24} className="mb-2"/>
+                                            <span className="font-mono text-xs uppercase">Нет заказов</span>
+                                        </div>
+                                    ) : (
+                                        columnOrders.map(order => {
+                                            const { score, isExpress, isWhale, hoursWaiting } = calculateScore(order);
+                                            const isHighPriority = score >= 50;
+                                            const isCritical = score >= 100;
+
+                                            return (
+                                                <div 
+                                                    key={order.id}
+                                                    draggable
+                                                    onDragStart={(e) => handleDragStart(e, order.id)}
+                                                    onDragEnd={handleDragEnd}
+                                                    onClick={() => setSelectedOrder(order)}
+                                                    className={`bg-white border p-4 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-all relative overflow-hidden group
+                                                        ${isCritical ? 'border-red-500 animate-pulse-fast' : isHighPriority ? 'border-orange-400' : 'border-zinc-200'}
+                                                    `}
+                                                >
+                                                    {/* SLA Indicator */}
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <span className="font-mono text-[10px] text-zinc-400">#{order.id.slice(0,6)}</span>
+                                                        <div className="flex gap-1">
+                                                            {isExpress && <Truck size={12} className="text-blue-600" />}
+                                                            {isWhale && <Users size={12} className="text-purple-600" />}
+                                                            {hoursWaiting > 48 && <Flame size={12} className="text-red-500" />}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="mb-2">
+                                                        <div className="font-bold text-sm uppercase truncate">{order.customer_info.firstName} {order.customer_info.lastName}</div>
+                                                        <div className="text-[10px] text-zinc-500 flex items-center gap-1">
+                                                            <Clock size={10} /> {Math.floor(hoursWaiting)}ч в очереди
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex justify-between items-end border-t border-dashed border-zinc-100 pt-2 mt-2">
+                                                        <div className="text-[10px] font-mono bg-zinc-100 px-2 py-1 rounded">
+                                                            SCORE: {score}
+                                                        </div>
+                                                        <div className="font-jura font-bold text-sm">{formatPrice(order.total_price)}</div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
                             </div>
-
-                            {/* Column Body */}
-                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                                {orders
-                                    .filter(o => col.statuses.includes(o.status))
-                                    .sort((a, b) => calculateScore(b).score - calculateScore(a).score) // SLA Sort
-                                    .map(order => {
-                                        const { score, isExpress, isWhale, hoursWaiting } = calculateScore(order);
-                                        const isHighPriority = score >= 50;
-                                        const isCritical = score >= 100;
-
-                                        return (
-                                            <div 
-                                                key={order.id}
-                                                draggable
-                                                onDragStart={(e) => handleDragStart(e, order.id)}
-                                                onClick={() => setSelectedOrder(order)}
-                                                className={`bg-white border p-4 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-all relative overflow-hidden group
-                                                    ${isCritical ? 'border-red-500 animate-pulse-fast' : isHighPriority ? 'border-orange-400' : 'border-zinc-200'}
-                                                `}
-                                            >
-                                                {/* SLA Indicator */}
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <span className="font-mono text-[10px] text-zinc-400">#{order.id.slice(0,6)}</span>
-                                                    <div className="flex gap-1">
-                                                        {isExpress && <Truck size={12} className="text-blue-600" />}
-                                                        {isWhale && <Users size={12} className="text-purple-600" />}
-                                                        {hoursWaiting > 48 && <Flame size={12} className="text-red-500" />}
-                                                    </div>
-                                                </div>
-
-                                                <div className="mb-2">
-                                                    <div className="font-bold text-sm uppercase truncate">{order.customer_info.firstName} {order.customer_info.lastName}</div>
-                                                    <div className="text-[10px] text-zinc-500 flex items-center gap-1">
-                                                        <Clock size={10} /> {Math.floor(hoursWaiting)}ч в очереди
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex justify-between items-end border-t border-dashed border-zinc-100 pt-2 mt-2">
-                                                    <div className="text-[10px] font-mono bg-zinc-100 px-2 py-1">
-                                                        SCORE: {score}
-                                                    </div>
-                                                    <div className="font-jura font-bold text-sm">{order.total_price.toLocaleString()} ₽</div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         )}
@@ -330,7 +353,7 @@ const AdminOrders: React.FC = () => {
                                     <td className="p-4 font-mono font-bold text-blue-900">
                                         #{order.id.slice(0,6)}
                                         <div className="text-[10px] text-zinc-400 font-normal mt-1">
-                                            {new Date(order.created_at).toLocaleDateString()}
+                                            {formatDate(order.created_at).split(' ')[0]}
                                         </div>
                                     </td>
                                     <td className="p-4">
@@ -341,7 +364,7 @@ const AdminOrders: React.FC = () => {
                                         <span className={`px-2 py-1 rounded ${score > 50 ? 'bg-red-100 text-red-600 font-bold' : 'bg-zinc-100'}`}>{score}</span>
                                     </td>
                                     <td className="p-4 text-center font-jura font-bold">
-                                        {order.total_price.toLocaleString()} ₽
+                                        {formatPrice(order.total_price)}
                                     </td>
                                     <td className="p-4 text-center">{getStatusBadge(order.status)}</td>
                                     <td className="p-4 text-center text-zinc-300 group-hover:text-blue-600"><Eye size={18}/></td>
@@ -354,8 +377,14 @@ const AdminOrders: React.FC = () => {
         )}
 
         {/* ORDER DETAILS DRAWER */}
-        <div className={`fixed inset-0 z-50 flex justify-end transition-all duration-300 pointer-events-none ${selectedOrder ? 'bg-black/20' : ''}`}>
-          <div className={`bg-white h-full w-full max-w-xl shadow-2xl border-l border-black flex flex-col pointer-events-auto transform transition-transform duration-300 ${selectedOrder ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div 
+            className={`fixed inset-0 z-50 flex justify-end transition-all duration-300 ${selectedOrder ? 'bg-black/20 pointer-events-auto' : 'pointer-events-none'}`}
+            onClick={() => setSelectedOrder(null)}
+        >
+          <div 
+            onClick={e => e.stopPropagation()}
+            className={`bg-white h-full w-full max-w-xl shadow-2xl border-l border-black flex flex-col pointer-events-auto transform transition-transform duration-300 ${selectedOrder ? 'translate-x-0' : 'translate-x-full'}`}
+          >
               {selectedOrder && (
                 <>
                 <div className="p-6 border-b border-zinc-200 flex justify-between items-center bg-zinc-50">
@@ -365,7 +394,7 @@ const AdminOrders: React.FC = () => {
                              {getStatusBadge(selectedOrder.status)}
                         </div>
                         <p className="font-mono text-xs text-zinc-400">
-                             {new Date(selectedOrder.created_at).toLocaleString()}
+                             {formatDate(selectedOrder.created_at)}
                         </p>
                     </div>
                     <button onClick={() => setSelectedOrder(null)} className="p-2 hover:bg-zinc-200 rounded-full"><X size={24}/></button>
@@ -407,7 +436,7 @@ const AdminOrders: React.FC = () => {
                                         <div className="text-xs font-mono text-zinc-500">
                                             Размер: {item.selectedSize} | Кол-во: {item.quantity}
                                         </div>
-                                        <div className="text-sm font-bold mt-1">{item.price.toLocaleString()} ₽</div>
+                                        <div className="text-sm font-bold mt-1">{formatPrice(item.price)}</div>
                                     </div>
                                 </div>
                             ))}

@@ -69,3 +69,33 @@ export const formatPhoneNumber = (value: string): string => {
 
   return formatted;
 };
+
+/**
+ * Formats currency to Russian standard (e.g. "15 000 ₽")
+ */
+export const formatPrice = (amount: number | undefined | null): string => {
+    if (amount === undefined || amount === null) return '0 ₽';
+    return amount.toLocaleString('ru-RU', {
+        style: 'currency',
+        currency: 'RUB',
+        maximumFractionDigits: 0
+    });
+};
+
+/**
+ * Formats date to Russian standard (e.g. "24.05.2024 14:30")
+ */
+export const formatDate = (dateString: string | undefined | null): string => {
+    if (!dateString) return '-';
+    try {
+        return new Date(dateString).toLocaleString('ru-RU', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (e) {
+        return dateString;
+    }
+};

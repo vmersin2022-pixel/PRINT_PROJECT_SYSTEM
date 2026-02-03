@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context';
@@ -123,6 +124,12 @@ const Catalog: React.FC = () => {
       pageTitle = "ВЫБОРКА";
   }
 
+  // Set Document Title
+  useEffect(() => {
+      document.title = `${pageTitle} | PRINT PROJECT`;
+      return () => { document.title = 'PRINT PROJECT | Бренд-куратор'; }
+  }, [pageTitle]);
+
   return (
     <div className="min-h-screen pt-24 pb-12 bg-white">
       <div className="container mx-auto px-4">
@@ -138,89 +145,100 @@ const Catalog: React.FC = () => {
         <div className="flex flex-col lg:flex-row gap-12">
             
             {/* --- LEFT SIDEBAR (Vertical Menu) --- */}
-            <aside className={`
-                fixed inset-0 z-50 bg-white p-8 overflow-y-auto transition-transform duration-300 lg:translate-x-0 lg:static lg:z-0 lg:w-64 lg:p-0 lg:border-r lg:border-zinc-200 lg:bg-transparent lg:block
-                ${isMobileFilterOpen ? 'translate-x-0' : '-translate-x-full'}
-            `}>
-                <div className="lg:hidden flex justify-between items-center mb-8">
-                    <span className="font-jura font-bold text-xl">ФИЛЬТРЫ</span>
-                    <button onClick={() => setIsMobileFilterOpen(false)}><X size={24}/></button>
-                </div>
+            {/* Mobile Backdrop & Container */}
+            <div className={`fixed inset-0 z-50 lg:static lg:z-auto lg:block ${isMobileFilterOpen ? 'pointer-events-auto' : 'pointer-events-none lg:pointer-events-auto'}`}>
+                
+                {/* Backdrop (Mobile Only) */}
+                <div 
+                    className={`absolute inset-0 bg-black/50 transition-opacity lg:hidden ${isMobileFilterOpen ? 'opacity-100' : 'opacity-0'}`} 
+                    onClick={() => setIsMobileFilterOpen(false)}
+                />
 
-                <div className="space-y-12 lg:sticky lg:top-32">
-                    
-                    {/* Active Filters Summary */}
-                    {(selectedCategories.length > 0 || selectedCollections.length > 0 || isNewFilter) && (
-                        <div className="mb-8">
-                            <button onClick={clearFilters} className="text-xs font-mono text-red-600 underline hover:no-underline mb-4">
-                                ОЧИСТИТЬ [X]
-                            </button>
-                            <div className="flex flex-wrap gap-2">
-                                {isNewFilter && (
-                                     <span className="text-[10px] bg-blue-900 text-white px-2 py-1 font-mono uppercase">NEW DROP</span>
-                                )}
-                                {selectedCategories.map(c => (
-                                    <span key={c} className="text-[10px] bg-black text-white px-2 py-1 font-mono uppercase">{CATEGORY_LABELS[c]}</span>
-                                ))}
-                                {selectedCollections.map(id => {
-                                    if (id === 'duo') return <span key={id} className="text-[10px] bg-zinc-500 text-white px-2 py-1 font-mono uppercase">ДЛЯ ДВОИХ</span>;
-                                    const col = collections.find(c => c.id === id);
-                                    return col ? <span key={id} className="text-[10px] bg-zinc-500 text-white px-2 py-1 font-mono uppercase">{col.title}</span> : null;
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Section 1: TYPE (Categories) */}
-                    <div>
-                        <h3 className="font-jura text-lg font-bold uppercase mb-4 border-b border-black pb-2">КАТЕГОРИИ</h3>
-                        <div className="space-y-3">
-                            {categories.map(cat => (
-                                <div 
-                                    key={cat} 
-                                    onClick={() => toggleCategory(cat)}
-                                    className="flex items-center gap-3 cursor-pointer group select-none"
-                                >
-                                    <div className={`w-4 h-4 border border-zinc-400 flex items-center justify-center transition-colors ${selectedCategories.includes(cat) ? 'bg-black border-black' : 'group-hover:border-black'}`}>
-                                        {selectedCategories.includes(cat) && <div className="w-2 h-2 bg-white" />}
-                                    </div>
-                                    <span className={`font-mono text-sm uppercase transition-colors ${selectedCategories.includes(cat) ? 'text-black font-bold' : 'text-zinc-500 group-hover:text-black'}`}>
-                                        {CATEGORY_LABELS[cat]}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
+                {/* Sidebar Content */}
+                <aside className={`
+                    absolute top-0 left-0 bottom-0 w-64 bg-white p-8 overflow-y-auto transition-transform duration-300 shadow-2xl lg:shadow-none lg:translate-x-0 lg:static lg:p-0 lg:border-r lg:border-zinc-200 lg:bg-transparent lg:block
+                    ${isMobileFilterOpen ? 'translate-x-0' : '-translate-x-full'}
+                `}>
+                    <div className="lg:hidden flex justify-between items-center mb-8">
+                        <span className="font-jura font-bold text-xl">ФИЛЬТРЫ</span>
+                        <button onClick={() => setIsMobileFilterOpen(false)}><X size={24}/></button>
                     </div>
 
-                    {/* Section 2: COLLECTIONS (Vertical List) */}
-                    <div>
-                        <h3 className="font-jura text-lg font-bold uppercase mb-4 border-b border-black pb-2">КОЛЛЕКЦИИ</h3>
-                        {collections.length === 0 ? (
-                            <p className="text-xs text-zinc-400 font-mono">НЕТ АКТИВНЫХ КОЛЛЕКЦИЙ</p>
-                        ) : (
-                            <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
-                                {collections.map(col => (
-                                    <div 
-                                        key={col.id} 
-                                        onClick={() => toggleCollection(col.id)}
-                                        className="flex items-start gap-3 cursor-pointer group select-none"
-                                    >
-                                        <div className={`mt-0.5 w-4 h-4 border border-zinc-400 flex-shrink-0 flex items-center justify-center transition-colors ${selectedCollections.includes(col.id) ? 'bg-blue-900 border-blue-900' : 'group-hover:border-blue-900'}`}>
-                                            {selectedCollections.includes(col.id) && <div className="w-2 h-2 bg-white" />}
-                                        </div>
-                                        <div>
-                                            <span className={`block font-mono text-sm uppercase leading-tight transition-colors ${selectedCollections.includes(col.id) ? 'text-blue-900 font-bold' : 'text-zinc-500 group-hover:text-black'}`}>
-                                                {col.title}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
+                    <div className="space-y-12 lg:sticky lg:top-32">
+                        
+                        {/* Active Filters Summary */}
+                        {(selectedCategories.length > 0 || selectedCollections.length > 0 || isNewFilter) && (
+                            <div className="mb-8">
+                                <button onClick={clearFilters} className="text-xs font-mono text-red-600 underline hover:no-underline mb-4">
+                                    ОЧИСТИТЬ [X]
+                                </button>
+                                <div className="flex flex-wrap gap-2">
+                                    {isNewFilter && (
+                                        <span className="text-[10px] bg-blue-900 text-white px-2 py-1 font-mono uppercase">NEW DROP</span>
+                                    )}
+                                    {selectedCategories.map(c => (
+                                        <span key={c} className="text-[10px] bg-black text-white px-2 py-1 font-mono uppercase">{CATEGORY_LABELS[c]}</span>
+                                    ))}
+                                    {selectedCollections.map(id => {
+                                        if (id === 'duo') return <span key={id} className="text-[10px] bg-zinc-500 text-white px-2 py-1 font-mono uppercase">ДЛЯ ДВОИХ</span>;
+                                        const col = collections.find(c => c.id === id);
+                                        return col ? <span key={id} className="text-[10px] bg-zinc-500 text-white px-2 py-1 font-mono uppercase">{col.title}</span> : null;
+                                    })}
+                                </div>
                             </div>
                         )}
-                    </div>
 
-                </div>
-            </aside>
+                        {/* Section 1: TYPE (Categories) */}
+                        <div>
+                            <h3 className="font-jura text-lg font-bold uppercase mb-4 border-b border-black pb-2">КАТЕГОРИИ</h3>
+                            <div className="space-y-3">
+                                {categories.map(cat => (
+                                    <div 
+                                        key={cat} 
+                                        onClick={() => toggleCategory(cat)}
+                                        className="flex items-center gap-3 cursor-pointer group select-none"
+                                    >
+                                        <div className={`w-4 h-4 border border-zinc-400 flex items-center justify-center transition-colors ${selectedCategories.includes(cat) ? 'bg-black border-black' : 'group-hover:border-black'}`}>
+                                            {selectedCategories.includes(cat) && <div className="w-2 h-2 bg-white" />}
+                                        </div>
+                                        <span className={`font-mono text-sm uppercase transition-colors ${selectedCategories.includes(cat) ? 'text-black font-bold' : 'text-zinc-500 group-hover:text-black'}`}>
+                                            {CATEGORY_LABELS[cat]}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Section 2: COLLECTIONS (Vertical List) */}
+                        <div>
+                            <h3 className="font-jura text-lg font-bold uppercase mb-4 border-b border-black pb-2">КОЛЛЕКЦИИ</h3>
+                            {collections.length === 0 ? (
+                                <p className="text-xs text-zinc-400 font-mono">НЕТ АКТИВНЫХ КОЛЛЕКЦИЙ</p>
+                            ) : (
+                                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+                                    {collections.map(col => (
+                                        <div 
+                                            key={col.id} 
+                                            onClick={() => toggleCollection(col.id)}
+                                            className="flex items-start gap-3 cursor-pointer group select-none"
+                                        >
+                                            <div className={`mt-0.5 w-4 h-4 border border-zinc-400 flex-shrink-0 flex items-center justify-center transition-colors ${selectedCollections.includes(col.id) ? 'bg-blue-900 border-blue-900' : 'group-hover:border-blue-900'}`}>
+                                                {selectedCollections.includes(col.id) && <div className="w-2 h-2 bg-white" />}
+                                            </div>
+                                            <div>
+                                                <span className={`block font-mono text-sm uppercase leading-tight transition-colors ${selectedCollections.includes(col.id) ? 'text-blue-900 font-bold' : 'text-zinc-500 group-hover:text-black'}`}>
+                                                    {col.title}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                    </div>
+                </aside>
+            </div>
 
             {/* --- RIGHT GRID (Products) --- */}
             <div className="flex-1">

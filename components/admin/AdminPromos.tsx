@@ -179,8 +179,14 @@ const AdminPromos: React.FC = () => {
 
             {/* CREATE MODAL */}
             {isEditorOpen && (
-                <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-md p-6 border border-black shadow-2xl animate-fade-up max-h-[90vh] overflow-y-auto">
+                <div 
+                    className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4"
+                    onClick={() => setIsEditorOpen(false)}
+                >
+                    <div 
+                        onClick={e => e.stopPropagation()}
+                        className="bg-white w-full max-w-md p-6 border border-black shadow-2xl animate-fade-up max-h-[90vh] overflow-y-auto"
+                    >
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="font-jura font-bold uppercase text-lg">НОВЫЙ ПРОМОКОД</h3>
                             <button onClick={() => setIsEditorOpen(false)}><X size={20}/></button>

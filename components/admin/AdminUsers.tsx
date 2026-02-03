@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { UserProfile, Order } from '../../types';
 import { Search, Mail, User, Shield, RefreshCcw, Send, Save, X, Phone, StickyNote, Ban, CheckCircle, Star, Flame, Snowflake, Gem, HeartHandshake } from 'lucide-react';
+import { formatPrice, formatDate } from '../../utils';
 
 const AdminUsers: React.FC = () => {
     const [users, setUsers] = useState<UserProfile[]>([]);
@@ -217,7 +218,7 @@ const AdminUsers: React.FC = () => {
                         <tr>
                             <th className="p-4">ПОЛЬЗОВАТЕЛЬ</th>
                             <th className="p-4 text-center">СТАТУС (CRM)</th>
-                            <th className="p-4 text-center">LTV (РУБ)</th>
+                            <th className="p-4 text-center">LTV</th>
                             <th className="p-4 text-center">ЗАМЕТКА</th>
                             <th className="p-4 text-right">ПОСЛЕДНИЙ ЗАКАЗ</th>
                         </tr>
@@ -263,13 +264,13 @@ const AdminUsers: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="p-4 text-center font-mono">
-                                        {u.total_spent ? u.total_spent.toLocaleString() : 0} ₽
+                                        {formatPrice(u.total_spent)}
                                     </td>
                                     <td className="p-4 text-center">
                                         {u.notes && <StickyNote size={16} className="text-yellow-500 inline fill-yellow-100"/>}
                                     </td>
                                     <td className="p-4 text-right font-mono text-xs text-zinc-500">
-                                        {u.last_order_date ? new Date(u.last_order_date).toLocaleDateString() : '-'}
+                                        {formatDate(u.last_order_date)}
                                     </td>
                                 </tr>
                             ))
@@ -279,8 +280,14 @@ const AdminUsers: React.FC = () => {
             </div>
 
             {/* --- CRM DRAWER --- */}
-            <div className={`fixed inset-0 z-[100] transition-all duration-300 pointer-events-none ${selectedUser ? 'bg-black/20' : ''}`}>
-                <div className={`absolute right-0 top-0 h-full w-full max-w-xl bg-white shadow-2xl border-l border-black transform transition-transform duration-300 pointer-events-auto flex flex-col ${selectedUser ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div 
+                className={`fixed inset-0 z-[100] transition-all duration-300 ${selectedUser ? 'bg-black/20 pointer-events-auto' : 'pointer-events-none'}`}
+                onClick={() => setSelectedUser(null)}
+            >
+                <div 
+                    onClick={e => e.stopPropagation()}
+                    className={`absolute right-0 top-0 h-full w-full max-w-xl bg-white shadow-2xl border-l border-black transform transition-transform duration-300 pointer-events-auto flex flex-col ${selectedUser ? 'translate-x-0' : 'translate-x-full'}`}
+                >
                     
                     {selectedUser && (
                         <>
@@ -308,7 +315,7 @@ const AdminUsers: React.FC = () => {
                             <div className="grid grid-cols-3 gap-4">
                                 <div className="bg-white p-4 border border-zinc-200 shadow-sm text-center">
                                     <div className="text-[10px] font-mono text-zinc-400 uppercase mb-1">Всего покупок (LTV)</div>
-                                    <div className="text-lg font-bold font-jura text-blue-900">{selectedUser.total_spent?.toLocaleString()} ₽</div>
+                                    <div className="text-lg font-bold font-jura text-blue-900">{formatPrice(selectedUser.total_spent)}</div>
                                 </div>
                                 <div className="bg-white p-4 border border-zinc-200 shadow-sm text-center">
                                     <div className="text-[10px] font-mono text-zinc-400 uppercase mb-1">Заказов</div>
@@ -317,7 +324,7 @@ const AdminUsers: React.FC = () => {
                                 <div className="bg-white p-4 border border-zinc-200 shadow-sm text-center">
                                     <div className="text-[10px] font-mono text-zinc-400 uppercase mb-1">Средний чек</div>
                                     <div className="text-lg font-bold font-jura text-zinc-600">
-                                        {(selectedUser.orders_count && selectedUser.total_spent) ? Math.round(selectedUser.total_spent / selectedUser.orders_count).toLocaleString() : 0} ₽
+                                        {formatPrice((selectedUser.orders_count && selectedUser.total_spent) ? Math.round(selectedUser.total_spent / selectedUser.orders_count) : 0)}
                                     </div>
                                 </div>
                             </div>
@@ -408,14 +415,14 @@ const AdminUsers: React.FC = () => {
                                             <div key={order.id} className="bg-white border border-zinc-200 p-3 hover:border-blue-400 transition-colors">
                                                 <div className="flex justify-between items-start mb-1">
                                                     <span className="font-bold font-jura text-sm">#{order.id.slice(0,6)}</span>
-                                                    <span className="font-mono text-xs text-zinc-400">{new Date(order.created_at).toLocaleDateString()}</span>
+                                                    <span className="font-mono text-xs text-zinc-400">{formatDate(order.created_at)}</span>
                                                 </div>
                                                 <div className="flex justify-between items-end">
                                                     <div className="text-[10px] text-zinc-500 font-mono max-w-[150px] truncate">
                                                         {order.order_items.map(i => i.name).join(', ')}
                                                     </div>
                                                     <div className="text-right">
-                                                        <div className="font-bold text-sm">{order.total_price} ₽</div>
+                                                        <div className="font-bold text-sm">{formatPrice(order.total_price)}</div>
                                                         <span className={`text-[9px] uppercase px-1 rounded ${order.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-500'}`}>
                                                             {order.status}
                                                         </span>

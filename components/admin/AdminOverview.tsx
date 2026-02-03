@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../supabaseClient';
 import { Order, ProductVariant, Product } from '../../types';
 import { TrendingUp, TrendingDown, Clock, AlertTriangle, DollarSign, ShoppingBag, ArrowRight, Wallet } from 'lucide-react';
+import { formatPrice } from '../../utils';
 
 interface AdminOverviewProps {
     onChangeTab: (tab: 'orders' | 'products') => void;
@@ -156,7 +157,7 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ onChangeTab }) => {
                         <DollarSign size={48} />
                     </div>
                     <h3 className="font-mono text-xs text-zinc-500 uppercase mb-2">Общая Выручка</h3>
-                    <div className="font-jura font-bold text-3xl mb-2">{metrics.revenue.toLocaleString()} ₽</div>
+                    <div className="font-jura font-bold text-3xl mb-2">{formatPrice(metrics.revenue)}</div>
                     <div className={`text-xs font-mono flex items-center gap-1 ${metrics.revenueChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {metrics.revenueChange >= 0 ? <TrendingUp size={14}/> : <TrendingDown size={14}/>}
                         {Math.abs(metrics.revenueChange)}% к вчерашнему дню
@@ -171,7 +172,7 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ onChangeTab }) => {
                     <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:10px_10px]" />
                     <div className="relative z-10">
                         <h3 className="font-mono text-xs text-zinc-400 uppercase mb-2">Чистая Прибыль</h3>
-                        <div className="font-jura font-bold text-3xl mb-2">{metrics.profit.toLocaleString()} ₽</div>
+                        <div className="font-jura font-bold text-3xl mb-2">{formatPrice(metrics.profit)}</div>
                         <div className="text-xs font-mono text-green-400">
                             МАРЖА: {metrics.profitMargin}%
                         </div>
@@ -229,7 +230,7 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ onChangeTab }) => {
                                         </div>
                                     </div>
                                     <div className="font-mono text-sm font-bold text-blue-900">
-                                        {p.revenue.toLocaleString()} ₽
+                                        {formatPrice(p.revenue)}
                                     </div>
                                 </div>
                             ))
@@ -241,7 +242,7 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ onChangeTab }) => {
                 <div className="bg-white border border-zinc-200 p-6">
                     <h3 className="font-jura font-bold uppercase text-lg mb-6 border-b pb-2">Средний чек (AOV)</h3>
                     <div className="flex flex-col items-center justify-center h-48">
-                        <div className="text-5xl font-bold font-jura text-black mb-2">{metrics.aov.toLocaleString()} ₽</div>
+                        <div className="text-5xl font-bold font-jura text-black mb-2">{formatPrice(metrics.aov)}</div>
                         <p className="text-sm font-mono text-zinc-500 text-center">
                             На основе {metrics.ordersCount} оплаченных заказов.<br/>
                             {metrics.aov > 5000 ? "Отличный показатель!" : "Есть потенциал для апсейла."}

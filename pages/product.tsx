@@ -28,6 +28,16 @@ const ProductDetail: React.FC = () => {
   const [isZoomOpen, setIsZoomOpen] = useState(false);
   const [fomoCount, setFomoCount] = useState(0);
 
+  // Dynamic Title
+  useEffect(() => {
+      if (product) {
+          document.title = `${product.name} | PRINT PROJECT`;
+      }
+      return () => {
+          document.title = 'PRINT PROJECT | Бренд-куратор';
+      };
+  }, [product]);
+
   // FOMO Effect
   useEffect(() => {
       setFomoCount(Math.floor(Math.random() * 5) + 2); // Random 2-7 people

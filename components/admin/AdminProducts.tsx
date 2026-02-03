@@ -370,8 +370,14 @@ const AdminProducts: React.FC = () => {
             </div>
 
             {/* --- EDITOR DRAWER (SLIDE OVER) --- */}
-            <div className={`fixed inset-0 z-[100] transition-all duration-300 pointer-events-none ${isEditorOpen ? 'bg-black/40' : ''}`}>
-                <div className={`absolute right-0 top-0 h-full w-full max-w-2xl bg-white shadow-2xl border-l border-black transform transition-transform duration-300 pointer-events-auto flex flex-col ${isEditorOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div 
+                className={`fixed inset-0 z-[100] transition-all duration-300 ${isEditorOpen ? 'bg-black/40 pointer-events-auto' : 'pointer-events-none'}`}
+                onClick={() => setIsEditorOpen(false)}
+            >
+                <div 
+                    onClick={e => e.stopPropagation()}
+                    className={`absolute right-0 top-0 h-full w-full max-w-2xl bg-white shadow-2xl border-l border-black transform transition-transform duration-300 flex flex-col ${isEditorOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                >
                     
                     {/* Header */}
                     <div className="p-6 border-b border-black flex justify-between items-center bg-zinc-50">

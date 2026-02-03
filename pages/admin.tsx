@@ -202,10 +202,10 @@ const Admin: React.FC = () => {
               <span className="font-mono text-xs text-zinc-500">ADMIN: {session.user.email}</span>
             </div>
             <h1 className="font-jura text-4xl font-bold uppercase">ERP SYSTEM</h1>
-            <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
+            <div className="flex gap-2 mt-4 overflow-x-auto pb-2 custom-scrollbar">
                 {[
                     { id: 'overview', label: 'ДАШБОРД', icon: BarChart2 },
-                    { id: 'cms', label: 'ВИЗУАЛ (CMS)', icon: Monitor }, // NEW TAB
+                    { id: 'cms', label: 'ВИЗУАЛ (CMS)', icon: Monitor }, 
                     { id: 'orders', label: 'ЗАКАЗЫ', icon: ShoppingCart }, 
                     { id: 'products', label: 'СКЛАД', icon: Package },
                     { id: 'collections', label: 'КОЛЛЕКЦИИ', icon: Layers }, 
