@@ -122,6 +122,22 @@ export interface UserProfile {
   };
 }
 
+// NEW: Support Ticket
+export interface SupportTicket {
+  id: string;
+  user_id: string;
+  order_id: string;
+  reason: string;
+  description?: string;
+  photo_proof?: string;
+  status: 'open' | 'approved' | 'rejected' | 'closed';
+  admin_response?: string;
+  created_at: string;
+  // Optional joined data
+  user_email?: string;
+  user_name?: string;
+}
+
 // NEW: Telegram Data Structure
 export interface TelegramUser {
   id: number;

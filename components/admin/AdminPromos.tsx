@@ -185,7 +185,7 @@ const AdminPromos: React.FC = () => {
                 >
                     <div 
                         onClick={e => e.stopPropagation()}
-                        className="bg-white w-full max-w-md p-6 border border-black shadow-2xl animate-fade-up max-h-[90vh] overflow-y-auto"
+                        className="bg-white w-full max-w-md p-6 border border-black shadow-2xl animate-blur-in max-h-[90vh] overflow-y-auto"
                     >
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="font-jura font-bold uppercase text-lg">НОВЫЙ ПРОМОКОД</h3>

@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { X, Truck, Calendar, MapPin } from 'lucide-react';
 
 interface Props {
@@ -12,7 +13,7 @@ const DeliveryModal: React.FC<Props> = ({ isOpen, onClose }) => {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white w-full max-w-2xl border border-black p-6 md:p-12 animate-fade-up">
+      <div className="relative bg-white w-full max-w-2xl border border-black p-6 md:p-12 animate-blur-in">
         <button onClick={onClose} className="absolute top-4 right-4 hover:rotate-90 transition-transform">
           <X size={24} />
         </button>

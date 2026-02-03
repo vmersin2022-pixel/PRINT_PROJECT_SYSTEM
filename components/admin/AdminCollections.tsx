@@ -7,7 +7,7 @@ import { useApp } from '../../context';
 import { getImageUrl } from '../../utils';
 
 const AdminCollections: React.FC = () => {
-    const { refreshData } = useApp();
+    const { refreshData, products } = useApp(); // Used products to calc count
     const [collections, setCollections] = useState<Collection[]>([]);
     const [loading, setLoading] = useState(true);
     
@@ -43,6 +43,12 @@ const AdminCollections: React.FC = () => {
     useEffect(() => {
         fetchCollections();
     }, []);
+
+    // Helper to count products
+    const getProductCount = (collectionId: string) => {
+        if (!products) return 0;
+        return products.filter(p => p.collectionIds && p.collectionIds.includes(collectionId)).length;
+    };
 
     const handleCreate = () => {
         setFormData({ id: '', title: '', description: '', image: '' });
@@ -141,12 +147,16 @@ const AdminCollections: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {collections.map(col => (
                     <div key={col.id} className="bg-white border border-black group relative">
-                        <div className="aspect-video bg-zinc-100 overflow-hidden border-b border-black">
+                        <div className="aspect-video bg-zinc-100 overflow-hidden border-b border-black relative">
                             {col.image ? (
                                 <img src={getImageUrl(col.image, 400)} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-zinc-300"><ImageIcon size={32}/></div>
                             )}
+                            {/* Product Count Badge */}
+                            <div className="absolute top-2 right-2 bg-black text-white text-[10px] font-mono px-2 py-1 uppercase">
+                                {getProductCount(col.id)} items
+                            </div>
                         </div>
                         <div className="p-4">
                             <div className="flex justify-between items-start mb-2">

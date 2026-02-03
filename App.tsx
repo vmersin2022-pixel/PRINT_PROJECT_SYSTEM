@@ -16,15 +16,17 @@ const Checkout = lazy(() => import('./pages/checkout'));
 const WishlistPage = lazy(() => import('./pages/wishlist'));
 const ProfilePage = lazy(() => import('./pages/profile'));
 const VKCallback = lazy(() => import('./pages/vk-callback'));
-const JournalPage = lazy(() => import('./pages/journal')); // NEW
-const ArticlePage = lazy(() => import('./pages/article')); // NEW
+const JournalPage = lazy(() => import('./pages/journal'));
+const ArticlePage = lazy(() => import('./pages/article'));
+const OrderSuccess = lazy(() => import('./pages/order-success')); // NEW
 
 import Header from './components/layout/Header';
 import Menu from './components/layout/Menu';
 import Cart from './components/layout/Cart';
 import Footer from './components/layout/Footer';
-import AnnouncementBar from './components/layout/AnnouncementBar'; // NEW
+import AnnouncementBar from './components/layout/AnnouncementBar';
 import CustomCursor from './components/ui/CustomCursor';
+import ScrollToTop from './components/ui/ScrollToTop'; // NEW
 import { Loader2 } from 'lucide-react';
 import { supabase } from './supabaseClient';
 
@@ -109,6 +111,8 @@ const App: React.FC = () => {
 
   return (
     <div className="font-sans text-black selection:bg-blue-600 selection:text-white relative flex flex-col min-h-screen">
+      <ScrollToTop /> {/* Global Scroll Fix */}
+      
       {/* Global Visual Effects */}
       <CustomCursor />
       <div className="bg-noise" />
@@ -130,7 +134,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <AnnouncementBar /> {/* NEW: Sits at the very top */}
+      <AnnouncementBar />
       <Header />
       <Menu />
       <Cart />
@@ -146,6 +150,7 @@ const App: React.FC = () => {
             <Route path="/product/:id" element={<ProductDetail />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/checkout" element={<Checkout />} />
+            <Route path="/order-success" element={<OrderSuccess />} /> {/* NEW ROUTE */}
             <Route path="/wishlist" element={<WishlistPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/vk-callback" element={<VKCallback />} />

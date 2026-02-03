@@ -2,10 +2,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { Order, OrderStatus } from '../../types';
-import { Eye, RefreshCcw, Search, ChevronLeft, ChevronRight, X, Printer, Users, MapPin, Truck, Save, CheckSquare, Square, Box, FileText, CheckCircle, LayoutTemplate, List, AlertCircle, Flame, Clock, Inbox } from 'lucide-react';
+import { Eye, RefreshCcw, Search, X, Printer, Users, MapPin, Truck, Save, List, LayoutTemplate, Flame, Clock, Inbox, Zap, AlertTriangle, CheckCircle } from 'lucide-react';
 import { formatPrice, formatDate } from '../../utils';
 
-const PAGE_SIZE = 50; // Increased for Kanban visibility
+const PAGE_SIZE = 50;
 const NOTIFICATION_SOUND_URL = "https://www.myinstants.com/media/sounds/cash-register-ka-ching.mp3";
 
 // Columns Configuration
@@ -22,13 +22,15 @@ const AdminOrders: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   
-  // Pagination & Search (List Mode mainly)
+  // NEW: Focus Mode State
+  const [isFocusMode, setIsFocusMode] = useState(false);
+
+  // Pagination & Search
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Selection & Details
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   
   // Drawer State
@@ -41,37 +43,45 @@ const AdminOrders: React.FC = () => {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // --- SLA SCORING ALGORITHM ---
-  const calculateScore = (order: Order) => {
-      let score = 0;
-      const hoursWaiting = (Date.now() - new Date(order.created_at).getTime()) / (1000 * 60 * 60);
+  // --- SLA & SCORE ALGORITHM ---
+  const getOrderMetrics = (order: Order) => {
+      const createdTime = new Date(order.created_at).getTime();
+      const hoursWaiting = (Date.now() - createdTime) / (1000 * 60 * 60);
+      
       const isExpress = order.customer_info.deliveryMethod === 'cdek_door';
       const isWhale = userSegments[order.user_id || ''] === 'whale';
       const isLarge = order.order_items.length > 3;
 
+      // SLA Logic
+      let slaStatus: 'normal' | 'warning' | 'critical' = 'normal';
+      if (hoursWaiting > 24) slaStatus = 'critical';
+      else if (hoursWaiting > 12) slaStatus = 'warning';
+
+      // Score Calculation
+      let score = Math.floor(hoursWaiting); 
       if (isExpress) score += 50;
       if (isWhale) score += 30;
       if (isLarge) score += 10;
-      score += Math.floor(hoursWaiting); // +1 point per hour
+      
+      // If critical, boost score to top
+      if (slaStatus === 'critical') score += 100;
 
-      return { score, isExpress, isWhale, isLarge, hoursWaiting };
+      return { score, isExpress, isWhale, hoursWaiting, slaStatus };
   };
 
   const fetchOrders = async () => {
     setLoading(true);
     try {
-        // 1. Fetch Orders
         let query = supabase
             .from('orders')
             .select('*', { count: 'exact' })
-            .neq('status', 'cancelled') // Exclude cancelled from Kanban generally
+            .neq('status', 'cancelled')
             .order('created_at', { ascending: false });
 
         if (viewMode === 'list') {
              query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
         } else {
-             // For Kanban we fetch more recent items (limit 100 for performance)
-             query = query.limit(100);
+             query = query.limit(200); // Fetch more for Kanban to ensure Focus Mode works well
         }
 
         if (searchQuery) {
@@ -81,7 +91,6 @@ const AdminOrders: React.FC = () => {
         const { data: ordersData, count, error } = await query;
         if (error) throw error;
         
-        // 2. Fetch User Segments (for SLA)
         const userIds = Array.from(new Set((ordersData as Order[]).map(o => o.user_id).filter(Boolean)));
         if (userIds.length > 0) {
             const { data: segmentsData } = await supabase
@@ -136,17 +145,12 @@ const AdminOrders: React.FC = () => {
   const handleDragStart = (e: React.DragEvent, orderId: string) => {
       setDraggedOrderId(orderId);
       e.dataTransfer.effectAllowed = 'move';
-      // Make dragged element transparent
-      if (e.target instanceof HTMLElement) {
-          e.target.style.opacity = '0.5';
-      }
+      if (e.target instanceof HTMLElement) e.target.style.opacity = '0.5';
   };
 
   const handleDragEnd = (e: React.DragEvent) => {
       setDraggedOrderId(null);
-      if (e.target instanceof HTMLElement) {
-          e.target.style.opacity = '1';
-      }
+      if (e.target instanceof HTMLElement) e.target.style.opacity = '1';
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -161,18 +165,14 @@ const AdminOrders: React.FC = () => {
       const column = KANBAN_COLUMNS.find(c => c.id === targetColumnId);
       if (!column) return;
 
-      // Determine new status (take the first status of the column as default target)
-      // e.g. Dropping to 'work' sets status to 'assembly'
       const newStatus = column.statuses[0];
-
-      // Optimistic Update
       setOrders(prev => prev.map(o => o.id === draggedOrderId ? { ...o, status: newStatus } : o));
 
       try {
           await supabase.from('orders').update({ status: newStatus }).eq('id', draggedOrderId);
       } catch (err) {
           console.error("Move failed", err);
-          fetchOrders(); // Revert
+          fetchOrders();
       }
       setDraggedOrderId(null);
   };
@@ -209,12 +209,22 @@ const AdminOrders: React.FC = () => {
       return <span className={`px-2 py-1 text-[10px] font-mono font-bold uppercase rounded ${colors[status]}`}>{status}</span>
   };
 
+  // --- FILTERED ORDERS FOR VIEW ---
+  const displayedOrders = orders.filter(o => {
+      if (isFocusMode) {
+          return !['completed', 'cancelled'].includes(o.status);
+      }
+      return true;
+  });
+
   return (
     <div className="space-y-6 pb-24 h-full flex flex-col">
         {/* HEADER CONTROLS */}
         <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 border border-zinc-200 gap-4 shrink-0">
-            <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className="flex items-center gap-4 w-full md:w-auto flex-wrap">
                 <h2 className="font-jura text-xl font-bold uppercase">ОЧЕРЕДЬ ЗАКАЗОВ</h2>
+                
+                {/* VIEW TOGGLES */}
                 <div className="flex bg-zinc-100 p-1 rounded border border-zinc-200">
                     <button 
                         onClick={() => setViewMode('kanban')}
@@ -229,6 +239,16 @@ const AdminOrders: React.FC = () => {
                         <List size={18} />
                     </button>
                 </div>
+
+                {/* FOCUS MODE TOGGLE */}
+                <button 
+                    onClick={() => setIsFocusMode(!isFocusMode)}
+                    className={`flex items-center gap-2 px-4 py-2 border font-bold text-xs uppercase transition-all duration-300 ${isFocusMode ? 'bg-zinc-900 text-white border-zinc-900 shadow-[0_0_15px_rgba(0,0,0,0.3)] animate-pulse' : 'bg-white text-zinc-500 border-zinc-300 hover:border-black hover:text-black'}`}
+                >
+                    <Zap size={14} className={isFocusMode ? 'fill-yellow-400 text-yellow-400' : ''} />
+                    FOCUS MODE: {isFocusMode ? 'ON' : 'OFF'}
+                </button>
+
                 <button onClick={fetchOrders} className="p-2 border hover:bg-zinc-100"><RefreshCcw size={16}/></button>
             </div>
             
@@ -251,9 +271,12 @@ const AdminOrders: React.FC = () => {
             <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar">
                 <div className="flex gap-4 h-full min-w-[1000px] px-1">
                     {KANBAN_COLUMNS.map(col => {
-                        const columnOrders = orders
+                        // Skip 'done' column in Focus Mode
+                        if (isFocusMode && col.id === 'done') return null;
+
+                        const columnOrders = displayedOrders
                             .filter(o => col.statuses.includes(o.status))
-                            .sort((a, b) => calculateScore(b).score - calculateScore(a).score);
+                            .sort((a, b) => getOrderMetrics(b).score - getOrderMetrics(a).score);
 
                         return (
                             <div 
@@ -279,9 +302,12 @@ const AdminOrders: React.FC = () => {
                                         </div>
                                     ) : (
                                         columnOrders.map(order => {
-                                            const { score, isExpress, isWhale, hoursWaiting } = calculateScore(order);
-                                            const isHighPriority = score >= 50;
-                                            const isCritical = score >= 100;
+                                            const { score, isExpress, isWhale, hoursWaiting, slaStatus } = getOrderMetrics(order);
+                                            
+                                            // SLA STYLING
+                                            let cardStyle = 'border-zinc-200';
+                                            if (slaStatus === 'critical') cardStyle = 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-pulse-slow';
+                                            else if (slaStatus === 'warning') cardStyle = 'border-orange-400 bg-orange-50/10';
 
                                             return (
                                                 <div 
@@ -290,9 +316,7 @@ const AdminOrders: React.FC = () => {
                                                     onDragStart={(e) => handleDragStart(e, order.id)}
                                                     onDragEnd={handleDragEnd}
                                                     onClick={() => setSelectedOrder(order)}
-                                                    className={`bg-white border p-4 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-all relative overflow-hidden group
-                                                        ${isCritical ? 'border-red-500 animate-pulse-fast' : isHighPriority ? 'border-orange-400' : 'border-zinc-200'}
-                                                    `}
+                                                    className={`bg-white border p-4 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-all relative overflow-hidden group ${cardStyle}`}
                                                 >
                                                     {/* SLA Indicator */}
                                                     <div className="flex justify-between items-start mb-2">
@@ -300,13 +324,14 @@ const AdminOrders: React.FC = () => {
                                                         <div className="flex gap-1">
                                                             {isExpress && <Truck size={12} className="text-blue-600" />}
                                                             {isWhale && <Users size={12} className="text-purple-600" />}
-                                                            {hoursWaiting > 48 && <Flame size={12} className="text-red-500" />}
+                                                            {slaStatus === 'critical' && <Flame size={12} className="text-red-500 fill-red-500 animate-pulse" />}
+                                                            {slaStatus === 'warning' && <AlertTriangle size={12} className="text-orange-500" />}
                                                         </div>
                                                     </div>
 
                                                     <div className="mb-2">
                                                         <div className="font-bold text-sm uppercase truncate">{order.customer_info.firstName} {order.customer_info.lastName}</div>
-                                                        <div className="text-[10px] text-zinc-500 flex items-center gap-1">
+                                                        <div className={`text-[10px] flex items-center gap-1 ${slaStatus === 'critical' ? 'text-red-600 font-bold' : 'text-zinc-500'}`}>
                                                             <Clock size={10} /> {Math.floor(hoursWaiting)}ч в очереди
                                                         </div>
                                                     </div>
@@ -337,7 +362,7 @@ const AdminOrders: React.FC = () => {
                         <tr className="bg-zinc-100 border-b border-black font-mono text-xs uppercase text-zinc-500">
                             <th className="p-4 w-24">ID</th>
                             <th className="p-4">Клиент</th>
-                            <th className="p-4 text-center">SLA Score</th>
+                            <th className="p-4 text-center">SLA</th>
                             <th className="p-4 text-center">Сумма</th>
                             <th className="p-4 text-center">Статус</th>
                             <th className="p-4 w-10"></th>
@@ -346,31 +371,42 @@ const AdminOrders: React.FC = () => {
                     <tbody className="divide-y divide-zinc-100 text-sm">
                         {loading ? (
                             <tr><td colSpan={6} className="p-8 text-center"><RefreshCcw className="animate-spin inline mr-2"/> Загрузка...</td></tr>
-                        ) : orders.map(order => {
-                            const { score } = calculateScore(order);
-                            return (
-                                <tr key={order.id} className="hover:bg-blue-50/50 transition-colors group cursor-pointer" onClick={() => setSelectedOrder(order)}>
-                                    <td className="p-4 font-mono font-bold text-blue-900">
-                                        #{order.id.slice(0,6)}
-                                        <div className="text-[10px] text-zinc-400 font-normal mt-1">
-                                            {formatDate(order.created_at).split(' ')[0]}
-                                        </div>
-                                    </td>
-                                    <td className="p-4">
-                                        <div className="font-bold uppercase">{order.customer_info.firstName} {order.customer_info.lastName}</div>
-                                        <div className="font-mono text-xs text-zinc-500">{order.customer_info.phone}</div>
-                                    </td>
-                                    <td className="p-4 text-center font-mono">
-                                        <span className={`px-2 py-1 rounded ${score > 50 ? 'bg-red-100 text-red-600 font-bold' : 'bg-zinc-100'}`}>{score}</span>
-                                    </td>
-                                    <td className="p-4 text-center font-jura font-bold">
-                                        {formatPrice(order.total_price)}
-                                    </td>
-                                    <td className="p-4 text-center">{getStatusBadge(order.status)}</td>
-                                    <td className="p-4 text-center text-zinc-300 group-hover:text-blue-600"><Eye size={18}/></td>
-                                </tr>
-                            )
-                        })}
+                        ) : displayedOrders.length === 0 ? (
+                            <tr><td colSpan={6} className="p-8 text-center text-zinc-400">Нет заказов</td></tr>
+                        ) : (
+                            displayedOrders.map(order => {
+                                const { score, slaStatus, hoursWaiting } = getOrderMetrics(order);
+                                let rowClass = 'hover:bg-blue-50/50';
+                                if (slaStatus === 'critical') rowClass = 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500';
+                                else if (slaStatus === 'warning') rowClass = 'bg-orange-50 hover:bg-orange-100 border-l-4 border-l-orange-400';
+
+                                return (
+                                    <tr key={order.id} className={`${rowClass} transition-colors group cursor-pointer`} onClick={() => setSelectedOrder(order)}>
+                                        <td className="p-4 font-mono font-bold text-blue-900">
+                                            #{order.id.slice(0,6)}
+                                            <div className="text-[10px] text-zinc-400 font-normal mt-1">
+                                                {formatDate(order.created_at).split(' ')[0]}
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="font-bold uppercase">{order.customer_info.firstName} {order.customer_info.lastName}</div>
+                                            <div className="font-mono text-xs text-zinc-500">{order.customer_info.phone}</div>
+                                        </td>
+                                        <td className="p-4 text-center font-mono">
+                                            <div className={`flex flex-col items-center ${slaStatus === 'critical' ? 'text-red-600' : ''}`}>
+                                                <span className="font-bold">{score}</span>
+                                                <span className="text-[9px] text-zinc-400">{Math.floor(hoursWaiting)}h</span>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-center font-jura font-bold">
+                                            {formatPrice(order.total_price)}
+                                        </td>
+                                        <td className="p-4 text-center">{getStatusBadge(order.status)}</td>
+                                        <td className="p-4 text-center text-zinc-300 group-hover:text-blue-600"><Eye size={18}/></td>
+                                    </tr>
+                                )
+                            })
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -403,11 +439,11 @@ const AdminOrders: React.FC = () => {
                 <div className="flex-1 overflow-y-auto p-6 space-y-8">
                     
                     {/* SLA SCORE INFO */}
-                    <div className="bg-zinc-900 text-white p-4 flex justify-between items-center">
-                        <span className="font-mono text-xs uppercase text-zinc-400">Приоритет (SLA)</span>
+                    <div className={`p-4 flex justify-between items-center ${getOrderMetrics(selectedOrder).slaStatus === 'critical' ? 'bg-red-600 text-white' : 'bg-zinc-900 text-white'}`}>
+                        <span className="font-mono text-xs uppercase opacity-80">Приоритет (SLA)</span>
                         <div className="flex items-center gap-2">
-                            {calculateScore(selectedOrder).score > 50 && <Flame className="text-red-500 animate-pulse" size={16}/>}
-                            <span className="font-jura font-bold text-xl">{calculateScore(selectedOrder).score} БАЛЛОВ</span>
+                            {getOrderMetrics(selectedOrder).slaStatus === 'critical' && <Flame className="animate-pulse" size={16}/>}
+                            <span className="font-jura font-bold text-xl">{getOrderMetrics(selectedOrder).score} БАЛЛОВ</span>
                         </div>
                     </div>
 

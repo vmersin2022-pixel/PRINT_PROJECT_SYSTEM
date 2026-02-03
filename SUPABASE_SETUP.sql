@@ -113,7 +113,21 @@ CREATE TABLE IF NOT EXISTS public.articles (
 );
 ALTER TABLE public.articles DISABLE ROW LEVEL SECURITY;
 
--- 9. Storage Buckets
+-- 9. SUPPORT TICKETS (NEW)
+CREATE TABLE IF NOT EXISTS public.support_tickets (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id uuid REFERENCES public.profiles(id),
+    order_id text, -- Keep as text to match orders table
+    reason text NOT NULL,
+    description text,
+    photo_proof text,
+    status text DEFAULT 'open', -- open, approved, rejected, closed
+    admin_response text,
+    created_at timestamptz DEFAULT now()
+);
+ALTER TABLE public.support_tickets DISABLE ROW LEVEL SECURITY;
+
+-- 10. Storage Buckets
 INSERT INTO storage.buckets (id, name, public) VALUES ('images', 'images', true) ON CONFLICT (id) DO NOTHING;
 CREATE POLICY "Images are publicly accessible" ON storage.objects FOR SELECT USING ( bucket_id = 'images' );
 CREATE POLICY "Anyone can upload images" ON storage.objects FOR INSERT WITH CHECK ( bucket_id = 'images' );

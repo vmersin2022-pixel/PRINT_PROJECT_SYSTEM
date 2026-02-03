@@ -147,7 +147,7 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ onChangeTab }) => {
     if (loading) return <div className="p-8 text-center font-mono animate-pulse">ANALYZING DATA STREAMS...</div>;
 
     return (
-        <div className="space-y-8 animate-fade-in">
+        <div className="space-y-8 animate-blur-in">
             {/* KPI GRID */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 

@@ -8,6 +8,7 @@ import { Order, OrderStatus, Product } from '../types';
 import AddressInput from '../components/ui/AddressInput';
 import { getImageUrl } from '../utils';
 import { supabase } from '../supabaseClient';
+import SupportTicketModal from '../components/ui/SupportTicketModal'; // NEW
 
 // --- HELPER: ORDER STATUS PROGRESS BAR ---
 const OrderProgress: React.FC<{ status: OrderStatus; tracking?: string }> = ({ status, tracking }) => {
@@ -113,6 +114,10 @@ const ProfilePage: React.FC = () => {
   // Subscriptions State
   const [subscribedProductIds, setSubscribedProductIds] = useState<string[]>([]);
   const [subLoading, setSubLoading] = useState(false);
+
+  // Support Modal State
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
+  const [supportOrderId, setSupportOrderId] = useState<string | null>(null);
 
   // Settings Form State
   const [settingsForm, setSettingsForm] = useState({
@@ -350,10 +355,9 @@ const ProfilePage: React.FC = () => {
       }
   };
 
-  const handleSupport = (orderId: string) => {
-      const botUsername = 'your_support_username'; // ЗАМЕНИТЬ НА РЕАЛЬНЫЙ ЮЗЕРНЕЙМ ПОДДЕРЖКИ ИЛИ БОТА
-      const text = `Привет! 👋 У меня вопрос по заказу #${orderId.slice(0,8)}. \n\n[Опишите вашу проблему...]`;
-      window.open(`https://t.me/${botUsername}?text=${encodeURIComponent(text)}`, '_blank');
+  const handleOpenSupport = (orderId: string) => {
+      setSupportOrderId(orderId);
+      setIsSupportOpen(true);
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -421,6 +425,15 @@ const ProfilePage: React.FC = () => {
   // --- LOGGED IN USER VIEW ---
   return (
     <div className="min-h-screen pt-24 pb-12 bg-white">
+      {user && (
+          <SupportTicketModal 
+            isOpen={isSupportOpen} 
+            onClose={() => setIsSupportOpen(false)} 
+            orderId={supportOrderId} 
+            userId={user.id} 
+          />
+      )}
+      
       <div className="container mx-auto px-4 max-w-6xl">
         
         {/* HEADER */}
@@ -504,7 +517,7 @@ const ProfilePage: React.FC = () => {
         
         {/* --- ORDERS TAB --- */}
         {activeTab === 'orders' && (
-            <div className="space-y-12 animate-fade-in">
+            <div className="space-y-12 animate-blur-in">
                 
                 {/* Orders List */}
                 <div className="space-y-6">
@@ -548,11 +561,11 @@ const ProfilePage: React.FC = () => {
                                             <div className="font-mono text-xs text-zinc-500 uppercase">Статус заказа</div>
                                             <div className="flex items-center gap-3">
                                                 <button 
-                                                    onClick={() => handleSupport(order.id)}
-                                                    className="flex items-center gap-1 text-[10px] font-bold uppercase text-zinc-400 hover:text-black transition-colors"
-                                                    title="Написать в поддержку"
+                                                    onClick={() => handleOpenSupport(order.id)}
+                                                    className="flex items-center gap-1 text-[10px] font-bold uppercase text-red-600 hover:text-red-700 transition-colors border border-red-100 px-2 py-1 rounded bg-red-50 hover:bg-red-100"
+                                                    title="Оформить возврат"
                                                 >
-                                                    <MessageCircle size={14}/> Помощь
+                                                    <MessageCircle size={14}/> Проблема с заказом
                                                 </button>
                                                 <button 
                                                     onClick={() => handleRepeatOrder(order)}
@@ -603,7 +616,7 @@ const ProfilePage: React.FC = () => {
 
         {/* --- DROP RADAR TAB --- */}
         {activeTab === 'drops' && (
-            <div className="animate-fade-in">
+            <div className="animate-blur-in">
                 <div className="bg-black text-white p-6 md:p-12 mb-12 relative overflow-hidden">
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"/>
                     <div className="relative z-10 text-center">
@@ -692,7 +705,7 @@ const ProfilePage: React.FC = () => {
 
         {/* --- WISHLIST TAB --- */}
         {activeTab === 'wishlist' && (
-            <div className="animate-fade-in">
+            <div className="animate-blur-in">
                 {likedProducts.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
                         {likedProducts.map(product => (
@@ -720,7 +733,7 @@ const ProfilePage: React.FC = () => {
 
         {/* --- SETTINGS TAB --- */}
         {activeTab === 'settings' && (
-            <div className="max-w-xl animate-fade-in">
+            <div className="max-w-xl animate-blur-in">
                 <div className="bg-blue-50 border border-blue-200 p-4 mb-6 text-sm text-blue-800 font-mono">
                     <p>Заполните данные для автоматической подстановки при оформлении заказа.</p>
                 </div>

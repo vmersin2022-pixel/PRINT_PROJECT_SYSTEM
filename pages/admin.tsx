@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShoppingCart, Package, Layers, Tag, Users, LogOut, Lock, AlertTriangle, Eye, EyeOff, UserPlus, ArrowRight, BarChart2, Monitor } from 'lucide-react';
+import { ShoppingCart, Package, Layers, Tag, Users, LogOut, Lock, AlertTriangle, Eye, EyeOff, UserPlus, ArrowRight, BarChart2, Monitor, MessageSquare } from 'lucide-react';
 import { useApp } from '../context';
 
 // Import sub-components
@@ -11,7 +11,8 @@ import AdminCollections from '../components/admin/AdminCollections';
 import AdminPromos from '../components/admin/AdminPromos';
 import AdminUsers from '../components/admin/AdminUsers';
 import AdminOverview from '../components/admin/AdminOverview';
-import AdminCMS from '../components/admin/AdminCMS'; // NEW
+import AdminCMS from '../components/admin/AdminCMS'; 
+import AdminSupport from '../components/admin/AdminSupport'; // NEW
 
 // --- CONFIG: ALLOWED ADMIN EMAILS ---
 const ALLOWED_ADMINS = ['vmersin2022@gmail.com']; 
@@ -19,7 +20,7 @@ const ALLOWED_ADMINS = ['vmersin2022@gmail.com'];
 const Admin: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'collections' | 'promocodes' | 'users' | 'cms'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'collections' | 'promocodes' | 'users' | 'cms' | 'support'>('overview');
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -205,8 +206,9 @@ const Admin: React.FC = () => {
             <div className="flex gap-2 mt-4 overflow-x-auto pb-2 custom-scrollbar">
                 {[
                     { id: 'overview', label: 'ДАШБОРД', icon: BarChart2 },
-                    { id: 'cms', label: 'ВИЗУАЛ (CMS)', icon: Monitor }, 
+                    { id: 'cms', label: 'ВИЗУАЛ', icon: Monitor }, 
                     { id: 'orders', label: 'ЗАКАЗЫ', icon: ShoppingCart }, 
+                    { id: 'support', label: 'ПОДДЕРЖКА', icon: MessageSquare }, // NEW
                     { id: 'products', label: 'СКЛАД', icon: Package },
                     { id: 'collections', label: 'КОЛЛЕКЦИИ', icon: Layers }, 
                     { id: 'promocodes', label: 'ПРОМО', icon: Tag },
@@ -227,6 +229,7 @@ const Admin: React.FC = () => {
         <div className="min-h-[500px]">
             {activeTab === 'overview' && <AdminOverview onChangeTab={setActiveTab} />}
             {activeTab === 'cms' && <AdminCMS />}
+            {activeTab === 'support' && <AdminSupport />}
             {activeTab === 'orders' && <AdminOrders />}
             {activeTab === 'products' && <AdminProducts />}
             {activeTab === 'collections' && <AdminCollections />}

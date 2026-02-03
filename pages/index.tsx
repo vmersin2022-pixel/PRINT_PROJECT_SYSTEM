@@ -33,7 +33,7 @@ const HeroCountdown: React.FC<{ targetDate: string }> = ({ targetDate }) => {
     if (!timeLeft) return null;
 
     return (
-        <div className="flex gap-4 font-jura text-white drop-shadow-md animate-fade-in mt-6">
+        <div className="flex gap-4 font-jura text-white drop-shadow-md animate-blur-in mt-6">
             {['days', 'hours', 'minutes', 'seconds'].map((unit) => (
                 <div key={unit} className="flex flex-col items-center bg-red-600/80 backdrop-blur border border-red-500 p-2 min-w-[60px]">
                     <span className="text-2xl md:text-3xl font-bold">
@@ -103,7 +103,7 @@ const Home: React.FC = () => {
         </div>
 
         <div className="container mx-auto px-4 relative z-10 flex flex-col justify-center items-start h-full">
-          <div className="max-w-3xl animate-fade-up">
+          <div className="max-w-3xl animate-blur-in">
             <div className={`inline-flex items-center gap-2 border px-3 py-1 mb-4 backdrop-blur-md ${isSaleMode ? 'border-red-600/50 bg-red-900/20' : 'border-blue-600/50 bg-blue-900/20'}`}>
               <span className={`w-1.5 h-1.5 rounded-full animate-pulse-fast ${isSaleMode ? 'bg-red-600' : 'bg-blue-600'}`} />
               <span className={`font-mono text-xs tracking-widest ${isSaleMode ? 'text-red-200' : 'text-blue-200'}`}>

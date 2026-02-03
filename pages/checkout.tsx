@@ -100,9 +100,8 @@ const Checkout: React.FC = () => {
       setLoading(false);
 
       if (success) {
-          alert('ЗАКАЗ УСПЕШНО СОЗДАН!\n\nНомер заказа и детали отправлены на email.\nСейчас вы будете перенаправлены на оплату (Демо).');
           clearCart(); // This also clears localStorage promo
-          navigate('/');
+          navigate('/order-success');
       }
   };
 
