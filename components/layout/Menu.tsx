@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { X, ChevronRight } from 'lucide-react';
@@ -20,6 +21,7 @@ const Menu: React.FC = () => {
     { name: 'Свежий Drop', path: '/catalog?category=fresh_drop' }, 
     { name: 'Коллекции', path: '/collections' },
     { name: 'А это для двоих', path: '/catalog?collection=duo' },
+    { name: 'Журнал / Медиа', path: '/journal' }, // NEW
     { name: 'Завершаем дроп', path: '/catalog?category=last_drop' }, 
   ];
 

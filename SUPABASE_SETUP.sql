@@ -88,7 +88,6 @@ GROUP BY p.id;
 GRANT SELECT ON public.customer_segments TO anon, authenticated, service_role;
 
 -- 7. HEADLESS CMS CONFIG (NEW)
--- Таблица для глобальных настроек сайта. Всегда одна строка ID=1.
 CREATE TABLE IF NOT EXISTS public.site_config (
     id int PRIMARY KEY DEFAULT 1,
     hero_title text DEFAULT 'PRINT PROJECT GAME',
@@ -99,12 +98,22 @@ CREATE TABLE IF NOT EXISTS public.site_config (
     sale_end_date timestamptz,
     CONSTRAINT one_row_only CHECK (id = 1)
 );
-
--- Инициализация конфига, если его нет
 INSERT INTO public.site_config (id) VALUES (1) ON CONFLICT DO NOTHING;
 ALTER TABLE public.site_config DISABLE ROW LEVEL SECURITY;
 
--- 8. Права на Storage
+-- 8. ARTICLES / JOURNAL (NEW)
+CREATE TABLE IF NOT EXISTS public.articles (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  title text NOT NULL,
+  cover_image text NOT NULL,
+  article_type text DEFAULT 'internal', -- 'internal' or 'external'
+  external_link text,
+  content text,
+  published_at timestamptz DEFAULT now() NOT NULL
+);
+ALTER TABLE public.articles DISABLE ROW LEVEL SECURITY;
+
+-- 9. Storage Buckets
 INSERT INTO storage.buckets (id, name, public) VALUES ('images', 'images', true) ON CONFLICT (id) DO NOTHING;
 CREATE POLICY "Images are publicly accessible" ON storage.objects FOR SELECT USING ( bucket_id = 'images' );
 CREATE POLICY "Anyone can upload images" ON storage.objects FOR INSERT WITH CHECK ( bucket_id = 'images' );

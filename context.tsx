@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Product, CartItem, AppContextType, Category, Collection, Order, PromoCode, ProductVariant, UserProfile, TelegramUser, OrderStatus, SiteConfig } from './types';
+import { Product, CartItem, AppContextType, Category, Collection, Order, PromoCode, ProductVariant, UserProfile, TelegramUser, OrderStatus, SiteConfig, Article } from './types';
 import { supabase } from './supabaseClient';
 import { User } from '@supabase/supabase-js';
 
@@ -28,6 +28,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const [activePromo, setActivePromo] = useState<PromoCode | null>(null);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]); 
   const [siteConfig, setSiteConfig] = useState<SiteConfig | null>(null); // HEADLESS CMS
+  const [articles, setArticles] = useState<Article[]>([]); // NEW: Articles
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -42,17 +43,18 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     return [];
   };
 
-  // --- 1. FETCH PUBLIC DATA (PRODUCTS, COLLECTIONS, CONFIG) ---
+  // --- 1. FETCH PUBLIC DATA (PRODUCTS, COLLECTIONS, CONFIG, ARTICLES) ---
   const fetchPublicData = async () => {
       try {
           const productPromise = supabase.from('products').select('*');
           const variantPromise = supabase.from('product_variants').select('*');
           const collectionPromise = supabase.from('collections').select('*');
           const promoPromise = supabase.from('promocodes').select('*');
-          const configPromise = supabase.from('site_config').select('*').single(); // FETCH CONFIG
+          const configPromise = supabase.from('site_config').select('*').single(); 
+          const articlesPromise = supabase.from('articles').select('*').order('published_at', { ascending: false });
 
-          const [prodRes, varRes, colRes, promoRes, configRes] = await Promise.all([
-              productPromise, variantPromise, collectionPromise, promoPromise, configPromise
+          const [prodRes, varRes, colRes, promoRes, configRes, artRes] = await Promise.all([
+              productPromise, variantPromise, collectionPromise, promoPromise, configPromise, articlesPromise
           ]);
 
           if (prodRes.error) {
@@ -87,6 +89,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           if (promoRes.data) setPromocodes(promoRes.data as PromoCode[]);
           
           if (configRes.data) setSiteConfig(configRes.data as SiteConfig);
+
+          if (artRes.data) setArticles(artRes.data as Article[]);
 
       } catch (err: any) {
           if (err.name === 'AbortError' || err.message?.includes('aborted')) return;
@@ -262,9 +266,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     };
   }, []);
 
-  // ... (Rest of existing methods: Auth, Cart, Products CRUD, etc. kept same) ...
-  // [Code omitted for brevity as it's unchanged from previous file, just re-exporting the Provider]
-  
   // --- AUTO-APPLY SAVED PROMO ---
   useEffect(() => {
     const savedPromoCode = localStorage.getItem('print_project_promo');
@@ -503,7 +504,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       let finalPromoCode = activePromo ? activePromo.code : null;
 
       if (activePromo) {
-          // Re-fetch promo to check limits one last time
           const { data: promoCheck } = await supabase
             .from('promocodes')
             .select('*')
@@ -522,7 +522,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                       discountAmount = Math.round(verifiedSubtotal * (value / 100));
                   }
               } else {
-                  // Promo invalid, discard it
                   finalPromoCode = null;
                   discountAmount = 0;
               }
@@ -678,7 +677,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       activePromo,
       allUsers,
       userProfile,
-      siteConfig, // EXPOSED
+      siteConfig,
+      articles, // EXPOSED
       wishlist,
       user,
       isSessionLoading, 
@@ -702,7 +702,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       togglePromoCodeDb,
       deletePromoCodeDb,
       refreshData,
-      updateSiteConfig, // EXPOSED
+      updateSiteConfig,
       toggleWishlist,
       loginWithMagicLink,
       loginWithPassword,

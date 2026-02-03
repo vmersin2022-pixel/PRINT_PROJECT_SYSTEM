@@ -144,6 +144,17 @@ export interface SiteConfig {
   sale_end_date?: string;
 }
 
+// NEW: Journal Article
+export interface Article {
+  id: string;
+  title: string;
+  cover_image: string;
+  article_type: 'internal' | 'external';
+  external_link?: string;
+  content?: string;
+  published_at: string;
+}
+
 export interface AppContextType {
   products: Product[];
   collections: Collection[];
@@ -152,6 +163,7 @@ export interface AppContextType {
   userOrders: Order[]; // Current user's orders
   promocodes: PromoCode[];
   activePromo: PromoCode | null;
+  articles: Article[]; // NEW: Journal Articles
   
   allUsers: UserProfile[]; // NEW: List of all registered users for Admin
   userProfile: UserProfile | null; // NEW: Current user profile data

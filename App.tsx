@@ -16,6 +16,8 @@ const Checkout = lazy(() => import('./pages/checkout'));
 const WishlistPage = lazy(() => import('./pages/wishlist'));
 const ProfilePage = lazy(() => import('./pages/profile'));
 const VKCallback = lazy(() => import('./pages/vk-callback'));
+const JournalPage = lazy(() => import('./pages/journal')); // NEW
+const ArticlePage = lazy(() => import('./pages/article')); // NEW
 
 import Header from './components/layout/Header';
 import Menu from './components/layout/Menu';
@@ -149,6 +151,8 @@ const App: React.FC = () => {
             <Route path="/vk-callback" element={<VKCallback />} />
             <Route path="/service" element={<ServicePage />} />
             <Route path="/service/:slug" element={<ServicePage />} />
+            <Route path="/journal" element={<JournalPage />} />
+            <Route path="/journal/:id" element={<ArticlePage />} />
             
             <Route path="*" element={<AuthRedirectHandler />} />
           </Routes>

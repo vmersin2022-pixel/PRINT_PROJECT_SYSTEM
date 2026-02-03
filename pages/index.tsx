@@ -1,7 +1,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, MoveRight, Layers, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { ArrowRight, MoveRight, Layers, ChevronLeft, ChevronRight, Clock, FileText, ArrowUpRight } from 'lucide-react';
 import FancyButton from '../components/ui/FancyButton';
 import PromoSequence from '../components/ui/PromoSequence';
 import ProductCard from '../components/ui/ProductCard';
@@ -47,7 +47,7 @@ const HeroCountdown: React.FC<{ targetDate: string }> = ({ targetDate }) => {
 };
 
 const Home: React.FC = () => {
-  const { products, collections, siteConfig } = useApp();
+  const { products, collections, siteConfig, articles } = useApp();
   const productsScrollRef = useRef<HTMLDivElement>(null);
   const collectionsScrollRef = useRef<HTMLDivElement>(null);
   
@@ -289,6 +289,47 @@ const Home: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* --- JOURNAL PREVIEW (NEW) --- */}
+      {articles.length > 0 && (
+        <section className="py-16 border-b border-zinc-200 bg-white">
+            <div className="container mx-auto px-4">
+                <div className="flex justify-between items-end mb-8">
+                    <div>
+                        <h2 className="font-jura text-4xl font-bold uppercase">ЖУРНАЛ / МЕДИА</h2>
+                        <p className="text-sm font-mono text-zinc-500 mt-2">КОНТЕКСТ, В КОТОРОМ МЫ ЖИВЕМ</p>
+                    </div>
+                    <Link to="/journal" className="font-mono text-xs uppercase border-b border-black hover:text-blue-600 hover:border-blue-600 transition-colors">Смотреть все</Link>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {articles.slice(0, 3).map(article => {
+                        const isExternal = article.article_type === 'external';
+                        const Wrapper: any = isExternal ? 'a' : Link;
+                        return (
+                            <Wrapper 
+                                key={article.id} 
+                                {...(isExternal ? { href: article.external_link, target: "_blank", rel: "noreferrer" } : { to: `/journal/${article.id}` })}
+                                className="group block"
+                            >
+                                <div className="aspect-video bg-zinc-100 mb-4 overflow-hidden border border-zinc-200">
+                                    <img src={getImageUrl(article.cover_image, 400)} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
+                                </div>
+                                <div className="flex items-center gap-2 mb-2 text-[10px] font-mono text-zinc-400 uppercase">
+                                    {isExternal ? <><ArrowUpRight size={10}/> СМИ</> : <><FileText size={10}/> СТАТЬЯ</>}
+                                    <span>•</span>
+                                    <span>{new Date(article.published_at).toLocaleDateString()}</span>
+                                </div>
+                                <h3 className="font-jura text-xl font-bold uppercase group-hover:text-blue-600 transition-colors line-clamp-2">
+                                    {article.title}
+                                </h3>
+                            </Wrapper>
+                        )
+                    })}
+                </div>
+            </div>
+        </section>
+      )}
 
       {/* --- PHILOSOPHY SECTION (UPDATED) --- */}
       <section className="relative pt-12 pb-24 border-t border-zinc-200 overflow-hidden bg-transparent">
