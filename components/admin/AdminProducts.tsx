@@ -57,10 +57,11 @@ const AdminProducts: React.FC = () => {
     
     // AI State
     const [aiTextLoading, setAiTextLoading] = useState(false);
-    const [aiImageLoading, setAiImageLoading] = useState(false);
+    const [aiImageLoading, setAiImageLoading] = useState(false); // API call status
+    const [imgIsLoading, setImgIsLoading] = useState(false); // Actual image fetch status
     const [aiImagePrompt, setAiImagePrompt] = useState(DEFAULT_IMAGE_PROMPT);
     const [aiPrintFile, setAiPrintFile] = useState<File | null>(null);
-    const [aiGeneratedImage, setAiGeneratedImage] = useState<string | null>(null); // Base64
+    const [aiGeneratedImage, setAiGeneratedImage] = useState<string | null>(null); // URL string
     
     const fileInputRef = useRef<HTMLInputElement>(null);
     const aiPrintInputRef = useRef<HTMLInputElement>(null);
@@ -148,13 +149,15 @@ const AdminProducts: React.FC = () => {
         
         setAiImageLoading(true);
         setAiGeneratedImage(null);
+        setImgIsLoading(true); // Prepare for new image load
 
         try {
-            const base64Image = await aiService.generateLookbook(aiPrintFile, aiImagePrompt);
-            setAiGeneratedImage(base64Image);
+            const imageUrl = await aiService.generateLookbook(aiPrintFile, aiImagePrompt);
+            setAiGeneratedImage(imageUrl);
         } catch (e: any) {
             console.error("AI Image Error", e);
             alert("AI Error: " + e.message);
+            setImgIsLoading(false); // Stop loading if error
         } finally {
             setAiImageLoading(false);
         }
@@ -164,12 +167,14 @@ const AdminProducts: React.FC = () => {
         if (!aiGeneratedImage) return;
         setUploading(true);
         try {
-            // Convert DataURL to Blob to File
+            // Convert URL/DataURL to Blob to File
             const res = await fetch(aiGeneratedImage);
+            if (!res.ok) throw new Error('Failed to fetch generated image');
+            
             const blob = await res.blob();
-            const file = new File([blob], `ai_lookbook_${Date.now()}.png`, { type: 'image/png' });
+            const file = new File([blob], `ai_lookbook_${Date.now()}.jpg`, { type: 'image/jpeg' });
 
-            const fileName = `ai_gen_${Date.now()}.png`;
+            const fileName = `ai_gen_${Date.now()}.jpg`;
             const { error: uploadError } = await supabase.storage.from('images').upload(fileName, file);
             if (uploadError) throw uploadError;
 
@@ -180,7 +185,8 @@ const AdminProducts: React.FC = () => {
             setAiPrintFile(null); // Reset
             
         } catch (e: any) {
-            alert('Ошибка сохранения: ' + e.message);
+            console.error("Save Error", e);
+            alert('Ошибка сохранения: ' + e.message + ' (Возможно CORS ограничение, попробуйте сохранить вручную)');
         } finally {
             setUploading(false);
         }
@@ -506,19 +512,29 @@ const AdminProducts: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* GENERATED IMAGE PREVIEW */}
+                            {/* GENERATED IMAGE PREVIEW WITH LOADING STATE */}
                             {aiGeneratedImage && (
                                 <div className="mt-4 border-t border-zinc-200 pt-4 flex gap-4 animate-fade-in items-start">
-                                    <div className="w-24 h-32 bg-zinc-100 border border-black shrink-0 relative">
-                                        <img src={aiGeneratedImage} className="w-full h-full object-cover" />
-                                        <div className="absolute top-0 right-0 bg-green-500 w-2 h-2"/>
+                                    <div className="w-24 h-32 bg-zinc-100 border border-black shrink-0 relative flex items-center justify-center">
+                                        {imgIsLoading && (
+                                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-100">
+                                                <Loader2 className="animate-spin text-zinc-400" size={20}/>
+                                            </div>
+                                        )}
+                                        <img 
+                                            src={aiGeneratedImage} 
+                                            className={`w-full h-full object-cover transition-opacity duration-300 ${imgIsLoading ? 'opacity-0' : 'opacity-100'}`} 
+                                            onLoad={() => setImgIsLoading(false)}
+                                            onError={() => setImgIsLoading(false)} // Fallback for error
+                                        />
+                                        {!imgIsLoading && <div className="absolute top-0 right-0 bg-green-500 w-2 h-2"/>}
                                     </div>
                                     <div className="flex-1">
                                         <p className="text-xs font-bold uppercase mb-2 text-green-700">GENERATION COMPLETE</p>
                                         <button 
                                             onClick={handleSaveAiImage}
-                                            disabled={uploading}
-                                            className="bg-blue-600 text-white px-4 py-2 text-xs font-bold uppercase hover:bg-blue-700 transition-colors w-full md:w-auto flex items-center justify-center gap-2"
+                                            disabled={uploading || imgIsLoading}
+                                            className="bg-blue-600 text-white px-4 py-2 text-xs font-bold uppercase hover:bg-blue-700 transition-colors w-full md:w-auto flex items-center justify-center gap-2 disabled:opacity-50"
                                         >
                                             {uploading ? 'SAVING...' : <><Save size={12}/> SAVE TO GALLERY</>}
                                         </button>
