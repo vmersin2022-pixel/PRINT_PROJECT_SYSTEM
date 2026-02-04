@@ -620,7 +620,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           discount_value: promo.discount_value,
           discount_type: promo.discount_type,
           is_active: true,
-          usage_limit: promo.usage_limit,
+          usage_limit: promo.usage_limit ?? null, // FIX TS18048
           min_order_amount: promo.min_order_amount,
           target_audience: promo.target_audience
       }]);

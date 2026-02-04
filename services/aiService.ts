@@ -89,9 +89,10 @@ export const aiService = {
             }
         });
 
-        // Ищем часть с изображением в ответе
-        if (response.candidates && response.candidates[0].content.parts) {
-            for (const part of response.candidates[0].content.parts) {
+        // Safe optional chaining for TS compatibility
+        const candidate = response.candidates?.[0];
+        if (candidate?.content?.parts) {
+            for (const part of candidate.content.parts) {
                 if (part.inlineData) {
                     return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
                 }

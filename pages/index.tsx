@@ -61,8 +61,8 @@ const Home: React.FC = () => {
 
   const marqueeText = "МОЖНО БОЛЬШЕ НЕ СКРОЛЛИТЬ МАРКЕТПЛЕЙСЫ // МЫ УЖЕ ОТОБРАЛИ ТРЕНДЫ // ВСЕ АКТУАЛЬНЫЕ ПРИНТЫ ЗДЕСЬ //";
 
-  // Generic scroll handler
-  const scroll = (ref: React.RefObject<HTMLDivElement>, direction: 'left' | 'right') => {
+  // Generic scroll handler - UPDATED TYPE to accept null in RefObject
+  const scroll = (ref: React.RefObject<HTMLDivElement | null>, direction: 'left' | 'right') => {
     if (ref.current) {
         const scrollAmount = ref === collectionsScrollRef ? 450 : 340; 
         ref.current.scrollBy({
