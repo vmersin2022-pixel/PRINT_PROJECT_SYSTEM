@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { Product, Category } from '../../types';
 import { getImageUrl } from '../../utils';
 import { useApp } from '../../context';
-import { Heart, Play, Lock, ShoppingBag, Plus, Check, X, ShieldAlert, Crown } from 'lucide-react';
+import { Heart, Play, Lock, ShoppingBag, Plus, Check, X, ShieldAlert, Crown, ArrowRight } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
@@ -19,37 +19,31 @@ const CATEGORY_LABELS: Record<Category, string> = {
 };
 
 const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'OS'];
-const WHALE_THRESHOLD = 15000; // Threshold to unlock Secret Drops
 
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-  const { wishlist, toggleWishlist, userProfile, addToCart } = useApp();
+  const { wishlist, toggleWishlist, userProfile, addToCart, siteConfig } = useApp();
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isMobileQuickAddOpen, setIsMobileQuickAddOpen] = useState(false);
   const [successSize, setSuccessSize] = useState<string | null>(null);
-  const [accessDenied, setAccessDenied] = useState(false);
+  
+  // New State for Velvet Rope Modal
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
   
   const intervalRef = useRef<any>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const isLiked = wishlist.includes(product.id);
 
-  // --- WHALE / VIP LOGIC ---
+  // --- DYNAMIC WHALE / VIP LOGIC ---
+  const WHALE_THRESHOLD = siteConfig?.vip_threshold || 15000;
+  
   const totalSpent = userProfile?.total_spent || 0;
   const isWhale = totalSpent >= WHALE_THRESHOLD;
   const isSecretLocked = product.isVipOnly && !isWhale;
   
   // Calculate how much more needed
   const remainingToUnlock = Math.max(0, WHALE_THRESHOLD - totalSpent);
-
-  // Generate a random-looking purchase count
-  const purchasedCount = useMemo(() => {
-    let hash = 0;
-    for (let i = 0; i < product.id.length; i++) {
-        hash = ((hash << 5) - hash) + product.id.charCodeAt(i);
-        hash |= 0;
-    }
-    return Math.abs(hash % 898) + 42; 
-  }, [product.id]);
+  const progressPercent = Math.min(100, (totalSpent / WHALE_THRESHOLD) * 100);
 
   // PREPARE SIZES
   const availableSizes = useMemo(() => {
@@ -102,7 +96,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       e.preventDefault();
       e.stopPropagation();
       if (isSecretLocked) {
-          triggerAccessDenied();
+          setIsUnlockModalOpen(true);
           return;
       }
       setIsMobileQuickAddOpen(!isMobileQuickAddOpen);
@@ -122,15 +116,10 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       }
   };
 
-  const triggerAccessDenied = () => {
-      setAccessDenied(true);
-      setTimeout(() => setAccessDenied(false), 3000);
-  };
-
   const handleCardClick = (e: React.MouseEvent) => {
       if (isSecretLocked) {
           e.preventDefault();
-          triggerAccessDenied();
+          setIsUnlockModalOpen(true);
       }
   };
 
@@ -139,26 +128,48 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const isCurrentVideo = isVideo(currentMediaSrc);
 
   return (
-    <div className={`group flex flex-col h-full animate-blur-in relative w-full ${isSecretLocked ? 'cursor-not-allowed select-none' : ''}`}>
-      
-      {/* ACCESS DENIED OVERLAY (POPUP) */}
-      {accessDenied && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center p-2 animate-fade-in pointer-events-none">
-              <div className="bg-black/90 text-white p-4 border-2 border-red-600 shadow-2xl text-center backdrop-blur-md">
-                  <ShieldAlert className="w-8 h-8 text-red-600 mx-auto mb-2 animate-bounce" />
-                  <h3 className="font-jura font-bold text-red-500 text-lg uppercase tracking-widest">ACCESS DENIED</h3>
-                  <p className="font-mono text-[10px] text-zinc-300 mt-2">
-                      LEVEL REQUIRED: WHALE
-                  </p>
-                  <div className="mt-3 pt-3 border-t border-zinc-800">
-                      <p className="text-xs font-mono">
-                          SPEND <span className="text-red-500 font-bold">{remainingToUnlock.toLocaleString()} ₽</span> MORE TO UNLOCK CLASSIFIED DROPS.
-                      </p>
-                  </div>
-              </div>
-          </div>
-      )}
+    <>
+    {/* --- VELVET ROPE UNLOCK MODAL --- */}
+    {isUnlockModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setIsUnlockModalOpen(false)}>
+            <div className="bg-white border border-black p-8 w-full max-w-sm relative shadow-2xl" onClick={e => e.stopPropagation()}>
+                <button onClick={() => setIsUnlockModalOpen(false)} className="absolute top-4 right-4 hover:rotate-90 transition-transform"><X size={20}/></button>
+                
+                <div className="flex flex-col items-center text-center">
+                    <div className="w-16 h-16 bg-zinc-100 rounded-full flex items-center justify-center mb-6 relative">
+                        <Lock size={32} className="text-zinc-400" />
+                        <div className="absolute -bottom-1 -right-1 bg-black text-white text-[10px] px-2 py-0.5 font-bold uppercase">LOCKED</div>
+                    </div>
 
+                    <h3 className="font-jura text-xl font-bold uppercase mb-2">ЗАКРЫТЫЙ ДОСТУП</h3>
+                    <p className="font-montserrat text-sm text-zinc-600 mb-6 leading-relaxed">
+                        Этот айтем — часть закрытой коллекции для своих. <br/>
+                        Чтобы разблокировать доступ, не хватает покупок.
+                    </p>
+
+                    <div className="w-full bg-zinc-100 h-2 rounded-full mb-2 overflow-hidden">
+                        <div 
+                            className="h-full bg-gradient-to-r from-blue-600 to-purple-600 transition-all duration-1000" 
+                            style={{ width: `${progressPercent}%` }}
+                        />
+                    </div>
+                    <p className="font-mono text-xs text-zinc-500 mb-8">
+                        ВАШ LTV: {totalSpent.toLocaleString()} ₽ / ЦЕЛЬ: {WHALE_THRESHOLD.toLocaleString()} ₽
+                    </p>
+
+                    <button 
+                        onClick={() => setIsUnlockModalOpen(false)}
+                        className="w-full bg-black text-white py-3 font-jura font-bold uppercase hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
+                    >
+                        ПРОДОЛЖИТЬ ПОКУПКИ <ArrowRight size={14}/>
+                    </button>
+                </div>
+            </div>
+        </div>
+    )}
+
+    <div className={`group flex flex-col h-full animate-blur-in relative w-full`}>
+      
       {/* WRAPPER LINK */}
       <Link 
         to={isSecretLocked ? '#' : `/product/${product.id}`} 
@@ -168,8 +179,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         {/* Container */}
         <div 
             className={`
-                relative w-full aspect-[3/4] overflow-hidden bg-white/40 backdrop-blur-md border shadow-sm transition-all duration-300 mb-4 shrink-0
-                ${isSecretLocked ? 'border-zinc-800 bg-zinc-900' : 'border-white/50 group-hover:shadow-[0_0_25px_rgba(46,89,132,0.3)] group-hover:border-blue-600'}
+                relative w-full aspect-[3/4] overflow-hidden bg-white/40 backdrop-blur-md border shadow-sm transition-all duration-300 mb-3 shrink-0
+                ${isSecretLocked ? 'border-zinc-300 bg-zinc-100' : 'border-white/50 group-hover:shadow-[0_0_25px_rgba(46,89,132,0.3)] group-hover:border-blue-600'}
             `}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
@@ -193,28 +204,22 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                             loading="lazy"
                             className={`w-full h-full object-cover transition-all duration-500 
                                 ${isSecretLocked 
-                                    ? 'blur-[15px] grayscale contrast-125 opacity-60 scale-110' 
+                                    // UPDATED BLUR LOGIC: Use distinct styling but visible product
+                                    ? 'grayscale contrast-125 opacity-70' 
                                     : 'grayscale group-hover:grayscale-0 scale-95 group-hover:scale-100'
                                 }
                             `} 
                         />
                     )}
                     
-                    {/* SECRET LOCKED OVERLAY */}
+                    {/* SECRET LOCKED VISUALS (Subtle) */}
                     {isSecretLocked && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center z-30">
-                            {/* Animated Scanline */}
-                            <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_50%,rgba(0,0,0,0.5)_50%)] bg-[size:100%_4px] pointer-events-none opacity-50" />
-                            
-                            <Lock size={32} className="text-zinc-500 mb-2" />
-                            <div className="border-2 border-zinc-500 px-3 py-1 bg-black/50 backdrop-blur-sm transform -rotate-12">
-                                <span className="font-jura font-bold text-zinc-300 text-sm uppercase tracking-widest">
-                                    TOP SECRET
-                                </span>
-                            </div>
-                            <p className="mt-4 font-mono text-[9px] text-zinc-500 uppercase tracking-widest">
-                                ACCESS LEVEL: WHALE
-                            </p>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none">
+                            <div className="absolute inset-0 bg-white/10" />
+                            <Lock size={24} className="text-black mb-2 drop-shadow-md" />
+                            <span className="font-jura font-bold text-black text-xs uppercase tracking-widest bg-white/80 px-2 py-1 backdrop-blur-sm">
+                                LOCKED ITEM
+                            </span>
                         </div>
                     )}
 
@@ -223,11 +228,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                             <Play size={16} className="text-white fill-white ml-1" />
                         </div>
                     )}
-
-                    {/* Tech Grid Overlay (Visible on Unlock Hover) */}
-                    {!isSecretLocked && (
-                        <div className="absolute inset-0 bg-[linear-gradient(rgba(46,89,132,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(46,89,132,0.1)_1px,transparent_1px)] bg-[size:20px_20px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none mix-blend-overlay" />
-                    )}
                 </div>
             </div>
             
@@ -235,15 +235,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             <div className="absolute top-3 left-3 flex flex-col gap-1 items-start pointer-events-none z-20">
                 {product.isVipOnly && (
                     <span className={`text-[9px] px-2 py-1 font-bold font-mono tracking-widest border shadow-md flex items-center gap-1
-                        ${isWhale ? 'bg-purple-900 text-white border-purple-500' : 'bg-black text-zinc-500 border-zinc-800'}
+                        ${isWhale ? 'bg-purple-900 text-white border-purple-500' : 'bg-white text-black border-black'}
                     `}>
                         {isWhale ? <Crown size={10} className="text-yellow-400 fill-yellow-400"/> : <Lock size={10}/>}
-                        {isWhale ? 'SECRET_DROP_UNLOCKED' : 'CLASSIFIED_FILE'}
+                        {isWhale ? 'VIP_UNLOCKED' : 'PRIVATE_CLUB'}
                     </span>
                 )}
                 {!isSecretLocked && product.isNew && (
                     <span className="bg-blue-600 text-white text-[9px] px-2 py-1 font-bold font-mono tracking-widest border border-blue-500 shadow-[0_0_10px_rgba(46,89,132,0.4)]">
-                        NEW_DROP
+                        NEW
                     </span>
                 )}
                 {!isSecretLocked && product.categories?.includes('last_drop') && (
@@ -256,11 +256,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             {/* --- ACTIONS (Top Right) --- */}
             {!isSecretLocked && (
                 <div className="absolute top-3 right-3 z-20 flex flex-col items-end gap-2">
-                    {/* Purchased Count Badge */}
-                    <div className="bg-white/90 backdrop-blur border border-zinc-200 text-black text-[9px] px-2 py-1 font-mono font-bold tracking-tight shadow-sm pointer-events-none">
-                        КУПЛЕНО {purchasedCount} РАЗ
-                    </div>
-                    
                     <button 
                         onClick={handleLike}
                         className={`w-8 h-8 flex items-center justify-center border transition-all duration-300 shadow-sm ${isLiked ? 'bg-red-600 border-red-600 text-white' : 'bg-white/80 border-zinc-200 text-zinc-400 hover:text-red-500 hover:border-red-500'}`}
@@ -274,7 +269,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             <button 
                 onClick={handleMobileQuickAddToggle}
                 className={`md:hidden absolute bottom-3 right-3 z-30 w-10 h-10 flex items-center justify-center shadow-lg border active:scale-95 transition-transform
-                    ${isSecretLocked ? 'bg-zinc-800 text-zinc-500 border-zinc-700' : 'bg-black text-white border-zinc-700'}
+                    ${isSecretLocked ? 'bg-zinc-100 text-black border-zinc-300' : 'bg-black text-white border-zinc-700'}
                 `}
             >
                 {isMobileQuickAddOpen ? <X size={20} /> : (
@@ -285,7 +280,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                 )}
             </button>
 
-            {/* --- QUICK ADD OVERLAY (DESKTOP: Slide Up / MOBILE: Fade In) --- */}
+            {/* --- QUICK ADD OVERLAY --- */}
             {!isSecretLocked && (
                 <div className={`
                     absolute inset-x-0 bottom-0 z-30 bg-white/95 backdrop-blur-xl border-t border-blue-600 p-3 transition-all duration-300 ease-out
@@ -327,35 +322,27 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                     </div>
                 </div>
             )}
-
-            {/* Corner Decors */}
-            <div className="absolute top-0 right-0 w-3 h-3 border-t border-r border-blue-600 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-3 h-3 border-b border-l border-blue-600 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
         </div>
 
-        {/* Info Block */}
+        {/* UPDATED TYPOGRAPHY HIERARCHY */}
         <div className="flex justify-between items-start px-1 mt-auto">
-            <div>
-            <h3 className={`font-jura font-bold text-base uppercase leading-tight transition-colors ${isSecretLocked ? 'text-zinc-500' : 'group-hover:text-blue-600'}`}>
-                {isSecretLocked ? "CLASSIFIED_OBJECT" : product.name}
-            </h3>
-            <p className="font-mono text-[9px] text-zinc-400 mt-1 uppercase tracking-wider">
-                {product.categories?.slice(0,2).map(c => CATEGORY_LABELS[c] || c).join(' // ')}
-            </p>
+            <div className="flex-1 pr-2">
+                <h3 className={`font-jura font-bold text-lg leading-tight transition-colors uppercase ${isSecretLocked ? 'text-zinc-400' : 'group-hover:text-blue-600'}`}>
+                    {product.name}
+                </h3>
+                <p className="font-mono text-[9px] text-zinc-400 mt-1 uppercase tracking-wider truncate">
+                    {product.categories?.slice(0,2).map(c => CATEGORY_LABELS[c] || c).join(' / ')}
+                </p>
             </div>
-            <div className="text-right whitespace-nowrap ml-2">
-                <span className={`font-jura font-bold block ${isSecretLocked ? 'blur-[4px] select-none opacity-50' : ''}`}>
+            <div className="text-right whitespace-nowrap">
+                <span className={`font-jura font-bold text-xl block ${isSecretLocked ? 'text-zinc-300' : 'text-black'}`}>
                     {product.price.toLocaleString('ru-RU')} ₽
                 </span>
-                {!isSecretLocked && (
-                    <span className="text-[9px] font-mono text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity block">
-                        IN_STOCK
-                    </span>
-                )}
             </div>
         </div>
       </Link>
     </div>
+    </>
   );
 };
 

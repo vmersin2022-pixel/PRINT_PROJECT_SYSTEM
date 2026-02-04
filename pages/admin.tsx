@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShoppingCart, Package, Layers, Tag, Users, LogOut, Lock, AlertTriangle, Eye, EyeOff, UserPlus, ArrowRight, BarChart2, Monitor, MessageSquare } from 'lucide-react';
+import { ShoppingCart, Package, Layers, Tag, Users, LogOut, Lock, AlertTriangle, Eye, EyeOff, UserPlus, ArrowRight, BarChart2, Monitor, MessageSquare, Settings } from 'lucide-react';
 import { useApp } from '../context';
 
 // Import sub-components
@@ -12,15 +12,14 @@ import AdminPromos from '../components/admin/AdminPromos';
 import AdminUsers from '../components/admin/AdminUsers';
 import AdminOverview from '../components/admin/AdminOverview';
 import AdminCMS from '../components/admin/AdminCMS'; 
-import AdminSupport from '../components/admin/AdminSupport'; // NEW
-
-// --- CONFIG: ALLOWED ADMIN EMAILS ---
-const ALLOWED_ADMINS = ['vmersin2022@gmail.com']; 
+import AdminSupport from '../components/admin/AdminSupport'; 
+import AdminSettings from '../components/admin/AdminSettings'; 
 
 const Admin: React.FC = () => {
   const [session, setSession] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'collections' | 'promocodes' | 'users' | 'cms' | 'support'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'collections' | 'promocodes' | 'users' | 'cms' | 'support' | 'settings'>('overview');
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,20 +28,44 @@ const Admin: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false);
 
   useEffect(() => {
-    // 1. Initial Session Check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false); 
-    });
+    checkAdminAccess();
     
-    // 2. Auth Listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
         setSession(session);
-        if (session) setLoading(false); 
+        if (session) {
+            checkAdminAccess();
+        } else {
+            setIsAdmin(false);
+            setLoading(false);
+        }
     });
     
     return () => subscription.unsubscribe();
   }, []);
+
+  const checkAdminAccess = async () => {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+
+      if (session?.user) {
+          // DATABASE CHECK: Only allow if role === 'admin'
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (profile && profile.role === 'admin') {
+              setIsAdmin(true);
+          } else {
+              setIsAdmin(false);
+              // Optional: Log them out if they are logged in but not admin
+              // await supabase.auth.signOut(); 
+          }
+      }
+      setLoading(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,35 +74,34 @@ const Admin: React.FC = () => {
     
     try {
         if (isRegistering) {
-            if (!ALLOWED_ADMINS.includes(email.trim())) {
-                throw new Error('ACCESS_DENIED: Этот Email не находится в списке разрешенных администраторов.');
-            }
             const { data, error } = await supabase.auth.signUp({
                 email,
                 password,
-                options: { data: { role: 'admin_init' } }
+                // Note: We cannot set 'role: admin' here securely. 
+                // The database RLS or Trigger must handle role assignment, 
+                // OR you must manually update the role in Supabase Dashboard for the first admin.
             });
 
             if (error) throw error;
 
             if (data.session) {
-                window.location.reload(); 
+                // Auto-login successful, but check access
+                await checkAdminAccess();
             } else if (data.user) {
-                const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-                if (!signInError) {
-                    window.location.reload();
-                } else {
-                    setLoginError('Аккаунт создан! Пожалуйста, подтвердите почту или попробуйте войти.');
-                    setIsRegistering(false);
-                }
+                setLoginError('Аккаунт создан! Пожалуйста, подтвердите почту. ВНИМАНИЕ: Для доступа запросите права администратора у владельца системы.');
+                setIsRegistering(false);
             }
         } else {
             const { data, error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) throw error;
             
-            if (data.user && !ALLOWED_ADMINS.includes(data.user.email || '')) {
+            await checkAdminAccess();
+            
+            // Check specifically after login attempt
+            const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user?.id).single();
+            if (profile?.role !== 'admin') {
                 await supabase.auth.signOut();
-                throw new Error('ACCESS_DENIED: Этот Email не имеет прав администратора.');
+                throw new Error('ACCESS_DENIED: У вас нет прав администратора. Обратитесь к владельцу.');
             }
         }
 
@@ -97,20 +119,21 @@ const Admin: React.FC = () => {
     }
   };
 
-  const handleLogout = async () => await supabase.auth.signOut();
+  const handleLogout = async () => {
+      await supabase.auth.signOut();
+      window.location.reload();
+  };
 
   // Loading State
-  if (loading && !session) return (
+  if (loading) return (
       <div className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center text-white font-mono gap-4">
           <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"/>
-          <span>SYSTEM_BOOT...</span>
+          <span>SYSTEM_SECURITY_CHECK...</span>
       </div>
   );
 
   // --- ACCESS DENIED / LOGIN SCREEN ---
-  const isAuthorized = session?.user?.email && ALLOWED_ADMINS.includes(session.user.email);
-
-  if (!session || !isAuthorized) {
+  if (!session || !isAdmin) {
       return (
         <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
             <div className="bg-white border border-black p-8 w-full max-w-md shadow-2xl relative overflow-hidden transition-all">
@@ -121,9 +144,9 @@ const Admin: React.FC = () => {
                         {isRegistering ? <UserPlus size={20} /> : <Lock size={20} />}
                     </div>
                     <h1 className="font-jura text-2xl font-bold uppercase">
-                        {isRegistering ? 'РЕГИСТРАЦИЯ ADMIN' : 'ERP ВХОД'}
+                        {isRegistering ? 'РЕГИСТРАЦИЯ' : 'ERP ВХОД'}
                     </h1>
-                    <p className="font-mono text-xs text-zinc-500 mt-2">RESTRICTED AREA // AUTHORIZED PERSONNEL ONLY</p>
+                    <p className="font-mono text-xs text-zinc-500 mt-2">RESTRICTED AREA // DATABASE VERIFICATION ACTIVE</p>
                 </div>
 
                 {loginError && (
@@ -172,7 +195,7 @@ const Admin: React.FC = () => {
                         disabled={loading}
                         className={`w-full text-white font-jura font-bold uppercase py-4 transition-colors disabled:opacity-50 flex justify-center items-center gap-2 ${isRegistering ? 'bg-green-600 hover:bg-green-700' : 'bg-black hover:bg-blue-900'}`}
                     >
-                        {loading ? 'ОБРАБОТКА...' : (isRegistering ? 'СОЗДАТЬ И ВОЙТИ' : 'ВОЙТИ В СИСТЕМУ')}
+                        {loading ? 'ОБРАБОТКА...' : (isRegistering ? 'СОЗДАТЬ АККАУНТ' : 'ВОЙТИ В СИСТЕМУ')}
                     </button>
                 </form>
 
@@ -182,7 +205,7 @@ const Admin: React.FC = () => {
                         onClick={() => { setIsRegistering(!isRegistering); setLoginError(null); }}
                         className="font-mono text-[10px] text-zinc-500 hover:text-black uppercase tracking-wider flex items-center justify-center gap-2 mx-auto group"
                     >
-                        {isRegistering ? 'Уже есть аккаунт? Войти' : 'Первый вход? Создать администратора'}
+                        {isRegistering ? 'Уже есть аккаунт? Войти' : 'Регистрация'}
                         <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
                     </button>
                 </div>
@@ -208,11 +231,12 @@ const Admin: React.FC = () => {
                     { id: 'overview', label: 'ДАШБОРД', icon: BarChart2 },
                     { id: 'cms', label: 'ВИЗУАЛ', icon: Monitor }, 
                     { id: 'orders', label: 'ЗАКАЗЫ', icon: ShoppingCart }, 
-                    { id: 'support', label: 'ПОДДЕРЖКА', icon: MessageSquare }, // NEW
+                    { id: 'support', label: 'ПОДДЕРЖКА', icon: MessageSquare }, 
                     { id: 'products', label: 'СКЛАД', icon: Package },
                     { id: 'collections', label: 'КОЛЛЕКЦИИ', icon: Layers }, 
                     { id: 'promocodes', label: 'ПРОМО', icon: Tag },
-                    { id: 'users', label: 'КЛИЕНТЫ', icon: Users } 
+                    { id: 'users', label: 'КЛИЕНТЫ', icon: Users },
+                    { id: 'settings', label: 'НАСТРОЙКИ', icon: Settings } 
                 ].map(tab => (
                     <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex items-center gap-2 font-mono text-sm px-4 py-2 border border-black transition-colors whitespace-nowrap ${activeTab === tab.id ? 'bg-black text-white' : 'bg-white text-black hover:bg-zinc-100'}`}>
                         <tab.icon size={14} /> {tab.label}
@@ -235,6 +259,7 @@ const Admin: React.FC = () => {
             {activeTab === 'collections' && <AdminCollections />}
             {activeTab === 'promocodes' && <AdminPromos />}
             {activeTab === 'users' && <AdminUsers />}
+            {activeTab === 'settings' && <AdminSettings />}
         </div>
 
       </div>

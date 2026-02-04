@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { X, Trash2, ArrowRight, Send, Tag, CreditCard, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Trash2, ArrowRight, Send, Tag, CreditCard, Sparkles, Zap, Gift } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context';
 import FancyButton from '../ui/FancyButton';
@@ -18,6 +18,9 @@ const Cart: React.FC = () => {
   
   // Points Redemption State
   const [usePoints, setUsePoints] = useState(false);
+  
+  // Animation state for totals
+  const [animatedTotal, setAnimatedTotal] = useState(0);
 
   // Sync active promo with status on mount/change
   useEffect(() => {
@@ -37,10 +40,8 @@ const Cart: React.FC = () => {
   // 1. PROMO DISCOUNT CALCULATION
   let discountAmount = 0;
   if (activePromo) {
-      // Re-verify min amount in render to auto-disable if user removed items
       if (activePromo.min_order_amount > subtotal) {
-          // If subtotal drops below limit, we don't apply math, but don't remove code yet to let user add items
-          // Visual indication handled below
+          // Promo inactive visual logic handled in render
       } else {
           if (activePromo.discount_type === 'fixed') {
               discountAmount = activePromo.discount_value;
@@ -54,14 +55,39 @@ const Cart: React.FC = () => {
   const totalAfterPromo = subtotal - discountAmount;
 
   // 2. POINTS CALCULATION
-  // Max usage: 50% of the totalAfterPromo
   const maxPointsUsage = Math.floor(totalAfterPromo * 0.5);
-  // User available points
   const userPoints = userProfile?.loyalty_points || 0;
-  // Actual points to deduct if toggle is ON
   const pointsToDeduct = usePoints ? Math.min(userPoints, maxPointsUsage) : 0;
 
   const finalTotal = totalAfterPromo - pointsToDeduct;
+
+  // --- ANIMATED TOTAL EFFECT ---
+  useEffect(() => {
+      // Simple easing animation for number
+      let start = animatedTotal;
+      const end = finalTotal;
+      if (start === end) return;
+
+      const duration = 500;
+      const startTime = performance.now();
+
+      const animate = (currentTime: number) => {
+          const elapsed = currentTime - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          
+          // Easing function (easeOutQuad)
+          const ease = 1 - (1 - progress) * (1 - progress);
+          
+          const current = start + (end - start) * ease;
+          setAnimatedTotal(current);
+
+          if (progress < 1) {
+              requestAnimationFrame(animate);
+          }
+      };
+      
+      requestAnimationFrame(animate);
+  }, [finalTotal]);
 
   // --- LOGIC: PROMO CODE ---
   const handleApplyPromo = async () => {
@@ -86,33 +112,9 @@ const Cart: React.FC = () => {
       setPromoErrorMsg('');
   }
 
-  // --- LOGIC: OPTION 1 (TELEGRAM) ---
-  const handleTelegramOrder = () => {
-    const botUsername = 'your_telegram_username'; // ЗАМЕНИТЕ НА СВОЙ ЮЗЕРНЕЙМ ИЛИ БОТА
-    
-    let message = `👋 Привет! Хочу оформить быстрый заказ:\n\n`;
-    cart.forEach((item, idx) => {
-        message += `${idx + 1}. ${item.name} | Размер: ${item.selectedSize} | x${item.quantity}\n`;
-    });
-    
-    message += `\n💰 Сумма заказа: ${finalTotal.toLocaleString()} ₽`;
-    if (activePromo && discountAmount > 0) {
-        const val = activePromo.discount_value;
-        const label = activePromo.discount_type === 'fixed' ? `${val}₽` : `${val}%`;
-        message += ` (Промокод: ${activePromo.code} -${label})`;
-    }
-    if (pointsToDeduct > 0) {
-        message += ` (Списано баллов: ${pointsToDeduct})`;
-    }
-    
-    const url = `https://t.me/${botUsername}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
-  };
-
-  // --- LOGIC: OPTION 3 (FULL CHECKOUT) ---
   const handleCheckout = () => {
     toggleCart(); 
-    navigate('/checkout'); // Go to full checkout page
+    navigate('/checkout'); 
   };
 
   return (
@@ -143,7 +145,6 @@ const Cart: React.FC = () => {
           ) : (
             cart.map((item) => (
               <div key={`${item.id}-${item.selectedSize}`} className="flex gap-4 bg-white p-4 border border-zinc-200 shadow-sm relative group">
-                {/* Optimized Thumbnail Image: 150px width */}
                 <img 
                     src={getImageUrl(item.images[0], 150)} 
                     alt={item.name} 
@@ -231,27 +232,38 @@ const Cart: React.FC = () => {
                 {promoStatus === 'error' && <p className="text-[10px] text-red-600 font-mono mt-1">{promoErrorMsg}</p>}
             </div>
 
-            {/* POINTS REDEMPTION */}
-            {userPoints > 0 && (
-                <div className="bg-yellow-50 border border-yellow-200 p-3 flex justify-between items-center">
-                    <div>
-                        <div className="flex items-center gap-2 font-bold font-jura text-sm text-yellow-800">
-                            <Sparkles size={14} className="fill-yellow-600 text-yellow-600" />
-                            {userPoints} БОНУСОВ
+            {/* SMART POINTS UI */}
+            {userPoints > 0 ? (
+                <div className={`p-4 border transition-all duration-300 ${usePoints ? 'bg-black border-black text-white shadow-lg transform scale-105' : 'bg-yellow-50 border-yellow-200'}`}>
+                    <div className="flex justify-between items-center mb-3">
+                        <div className="flex items-center gap-2 font-bold font-jura text-sm">
+                            <Sparkles size={16} className={usePoints ? "fill-yellow-400 text-yellow-400" : "fill-yellow-600 text-yellow-600"} />
+                            <span className={usePoints ? "text-white" : "text-yellow-800"}>{userPoints} БОНУСОВ</span>
                         </div>
-                        <p className="text-[10px] text-yellow-700 font-mono">
-                            Доступно для списания: {Math.min(userPoints, maxPointsUsage)}
+                        <p className={`text-[10px] font-mono ${usePoints ? "text-zinc-400" : "text-yellow-700"}`}>
+                            Доступно: {Math.min(userPoints, maxPointsUsage)}
                         </p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                        <input 
-                            type="checkbox" 
-                            className="sr-only peer" 
-                            checked={usePoints}
-                            onChange={() => setUsePoints(!usePoints)}
-                        />
-                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-yellow-500"></div>
-                    </label>
+                    
+                    <button 
+                        onClick={() => setUsePoints(!usePoints)}
+                        className={`w-full py-2 font-jura font-bold uppercase text-xs flex items-center justify-center gap-2 transition-all border ${usePoints ? 'bg-white text-black border-white hover:bg-zinc-200' : 'bg-yellow-400 text-yellow-900 border-yellow-400 hover:bg-yellow-500'}`}
+                    >
+                        {usePoints ? (
+                            <>ОТМЕНИТЬ СПИСАНИЕ</>
+                        ) : (
+                            <><Zap size={14}/> ПРИМЕНИТЬ MAX BOOST</>
+                        )}
+                    </button>
+                </div>
+            ) : (
+                <div className="p-4 bg-zinc-50 border border-zinc-200 flex gap-3 items-center">
+                    <div className="w-8 h-8 bg-black rounded-full flex items-center justify-center shrink-0">
+                        <Gift size={14} className="text-white" />
+                    </div>
+                    <p className="text-[10px] font-mono text-zinc-500 uppercase leading-tight">
+                        Совершите первую покупку, чтобы начать копить <span className="text-black font-bold">кешбэк 5%</span>
+                    </p>
                 </div>
             )}
 
@@ -269,29 +281,22 @@ const Cart: React.FC = () => {
                         <span>-{pointsToDeduct} ₽</span>
                     </div>
                 )}
-                <div className="flex justify-between items-center mt-3 font-jura text-xl font-bold">
+                <div className="flex justify-between items-center mt-3 font-jura text-2xl font-bold">
                     <span>ИТОГО</span>
-                    <span>{finalTotal.toFixed(0)} ₽</span>
+                    <span className="flex items-center">
+                        {/* Animated Number Logic Display */}
+                        {Math.floor(animatedTotal).toLocaleString()} ₽
+                    </span>
                 </div>
             </div>
 
             {/* Actions */}
             <div className="grid grid-cols-1 gap-3">
-                {/* OPTION 3: FULL CHECKOUT */}
                 <FancyButton fullWidth variant="solid" onClick={handleCheckout}>
                   ОФОРМИТЬ ЗАКАЗ
                 </FancyButton>
-                
-                {/* OPTION 1: TELEGRAM */}
-                <button 
-                    onClick={handleTelegramOrder}
-                    className="w-full py-3 border border-blue-600 text-blue-600 font-jura font-bold uppercase text-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-2"
-                >
-                    <Send size={16} /> Быстрый заказ в Telegram
-                </button>
             </div>
 
-            {/* Required Disclaimer */}
             <p className="text-[10px] text-zinc-400 text-center font-mono leading-tight pt-2">
                 Способы оплаты и доставки можно выбрать при оформлении заказа
             </p>

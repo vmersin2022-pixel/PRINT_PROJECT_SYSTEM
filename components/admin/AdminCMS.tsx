@@ -15,7 +15,8 @@ const AdminCMS: React.FC = () => {
         hero_image: '',
         announcement_text: '',
         sale_mode: false,
-        sale_end_date: ''
+        sale_end_date: '',
+        // vip_threshold removed from here
     });
     const [uploading, setUploading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -41,7 +42,7 @@ const AdminCMS: React.FC = () => {
                 hero_image: siteConfig.hero_image || '',
                 announcement_text: siteConfig.announcement_text || '',
                 sale_mode: siteConfig.sale_mode || false,
-                sale_end_date: siteConfig.sale_end_date ? new Date(siteConfig.sale_end_date).toISOString().slice(0, 16) : ''
+                sale_end_date: siteConfig.sale_end_date ? new Date(siteConfig.sale_end_date).toISOString().slice(0, 16) : '',
             });
         }
     }, [siteConfig]);
@@ -176,7 +177,8 @@ const AdminCMS: React.FC = () => {
 
                 {/* SALE & ALERTS */}
                 <div className="space-y-6">
-                    <h3 className="font-bold uppercase text-sm border-b pb-2 flex items-center gap-2 text-red-600"><AlertTriangle size={16}/> Режим Распродажи</h3>
+                    <h3 className="font-bold uppercase text-sm border-b pb-2 flex items-center gap-2 text-red-600"><AlertTriangle size={16}/> Маркетинг и Акции</h3>
+                    
                     <div className="bg-red-50 border border-red-200 p-6 rounded-lg">
                         <label className="flex items-center justify-between cursor-pointer mb-4">
                             <span className="font-jura font-bold text-lg uppercase text-red-900">Включить SALE MODE</span>

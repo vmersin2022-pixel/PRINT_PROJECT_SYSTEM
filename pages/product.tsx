@@ -7,7 +7,7 @@ import SizeGuideModal from '../components/ui/SizeGuideModal';
 import DeliveryModal from '../components/ui/DeliveryModal';
 import ProductCard from '../components/ui/ProductCard';
 import PromoSequence from '../components/ui/PromoSequence';
-import { Ruler, ShieldCheck, Truck, ChevronLeft, ChevronRight, Send, Clock, Minus, Plus, Heart, Eye, Maximize2, X, Instagram, Camera } from 'lucide-react';
+import { Ruler, ShieldCheck, Truck, ChevronLeft, ChevronRight, Send, Clock, Minus, Plus, Heart, Eye, Maximize2, X, Instagram, Camera, Info, Package } from 'lucide-react';
 import { Category } from '../types';
 import { getImageUrl } from '../utils';
 
@@ -199,7 +199,7 @@ const ProductDetail: React.FC = () => {
                 )}
             </div>
 
-            <div className="border-t border-black pt-8">
+            <div className="border-t border-black pt-8 hidden lg:block">
               <h3 className="font-jura font-bold uppercase text-xl mb-4">Детализация</h3>
               <p className="font-montserrat text-sm md:text-base text-zinc-700 leading-relaxed max-w-2xl">
                 {product.description}
@@ -219,7 +219,7 @@ const ProductDetail: React.FC = () => {
 
           {/* Right Column: Info & Actions */}
           <div className="lg:col-span-5 relative">
-            <div className="lg:sticky lg:top-24 h-fit bg-white/80 backdrop-blur-sm p-1 lg:p-0">
+            <div className="lg:sticky lg:top-24 h-fit bg-white/95 backdrop-blur-sm p-1 lg:p-0">
                 <div className="mb-2 flex gap-2 flex-wrap">
                     {product.categories?.map(cat => (
                         <span key={cat} className="text-[10px] uppercase font-mono bg-zinc-100 px-2 py-0.5 text-zinc-500 border border-zinc-200">
@@ -234,16 +234,17 @@ const ProductDetail: React.FC = () => {
                     <span>{fomoCount} ЧЕЛОВЕК СМОТРЯТ ЭТОТ ТОВАР</span>
                 </div>
 
-                <h1 className="font-jura text-4xl md:text-5xl font-bold uppercase leading-none mb-4">
-                {product.name}
+                {/* UPDATED: Bigger Typography */}
+                <h1 className="font-jura text-5xl md:text-6xl font-bold uppercase leading-none mb-6">
+                    {product.name}
                 </h1>
+                
                 <div className="flex items-center justify-between mb-8">
-                    <p className="font-mono text-blue-900 font-bold text-2xl">
-                    {product.price.toLocaleString('ru-RU')} ₽
+                    <p className="font-jura text-black font-bold text-4xl">
+                        {product.price.toLocaleString('ru-RU')} ₽
                     </p>
-                    <button onClick={() => toggleWishlist(product.id)} className="group flex items-center gap-2 text-xs font-mono uppercase tracking-wide hover:text-red-600 transition-colors">
+                    <button onClick={() => toggleWishlist(product.id)} className="group flex items-center gap-2 text-xs font-mono uppercase tracking-wide hover:text-red-600 transition-colors border border-zinc-200 px-3 py-2 rounded-full">
                         <Heart size={18} className={isLiked ? "fill-red-600 text-red-600" : ""} />
-                        <span>{isLiked ? "SAVED" : "SAVE"}</span>
                     </button>
                 </div>
 
@@ -252,7 +253,7 @@ const ProductDetail: React.FC = () => {
                 {/* Multi-Size Selector */}
                 <div className="mb-6">
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="font-jura font-bold uppercase">Размер</h3>
+                        <h3 className="font-jura font-bold uppercase">ВЫБЕРИТЕ РАЗМЕР</h3>
                     </div>
                     <div className="flex flex-wrap gap-3">
                         {['S', 'M', 'L', 'XL', '2XL', '3XL'].map((size) => {
@@ -268,8 +269,8 @@ const ProductDetail: React.FC = () => {
                                     key={size}
                                     onClick={() => !isOutOfStock && toggleSize(size)}
                                     disabled={isOutOfStock}
-                                    className={`relative min-w-[48px] h-12 px-4 flex items-center justify-center border font-jura font-bold transition-all duration-200
-                                    ${isOutOfStock ? 'bg-zinc-100 text-zinc-300 border-zinc-200 cursor-not-allowed line-through' : isSelected ? 'bg-blue-900 text-white border-blue-900 shadow-[4px_4px_0_rgba(0,0,0,1)]' : 'bg-white text-black border-zinc-300 hover:border-black'}`}
+                                    className={`relative min-w-[56px] h-14 px-4 flex items-center justify-center border font-jura font-bold text-lg transition-all duration-200
+                                    ${isOutOfStock ? 'bg-zinc-100 text-zinc-300 border-zinc-200 cursor-not-allowed line-through' : isSelected ? 'bg-black text-white border-black shadow-[4px_4px_0_rgba(46,89,132,1)] transform -translate-y-1' : 'bg-white text-black border-zinc-300 hover:border-black'}`}
                                 >
                                     {size}
                                     {isOutOfStock && <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[8px] px-1 font-mono">SOLD</span>}
@@ -299,29 +300,30 @@ const ProductDetail: React.FC = () => {
                     })}
                 </div>
 
-                {/* Quantity Display */}
-                <div className="mb-8">
-                    <h3 className="font-jura font-bold uppercase mb-4">Количество</h3>
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center border border-black h-12 bg-zinc-100 cursor-not-allowed">
-                            <div className="w-12 h-full flex items-center justify-center text-zinc-400"><Minus size={16} /></div>
-                            <div className="w-12 h-full flex items-center justify-center font-mono font-bold border-x border-zinc-200">{quantity}</div>
-                            <div className="w-12 h-full flex items-center justify-center text-zinc-400"><Plus size={16} /></div>
-                        </div>
-                        <div className="font-mono text-xs text-zinc-500">ИТОГО: {totalPrice.toLocaleString()} ₽</div>
+                <div className="mb-6 sticky bottom-0 bg-white/95 backdrop-blur py-4 border-t border-zinc-100 lg:static lg:border-0 lg:bg-transparent lg:py-0 z-30">
+                    <FancyButton fullWidth variant="solid" onClick={handleAddToCart} className="text-lg py-4">ДОБАВИТЬ В КОРЗИНУ</FancyButton>
+                    
+                    {/* UPDATED: Prominent Secondary Buttons */}
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                        <button onClick={() => setShowSizeGuide(true)} className="flex flex-col items-center justify-center gap-2 py-4 bg-zinc-50 border border-zinc-200 hover:border-black hover:bg-white transition-all group">
+                            <Ruler size={20} className="text-zinc-400 group-hover:text-black transition-colors" /> 
+                            <span className="font-jura font-bold text-xs uppercase">Таблица размеров</span>
+                        </button>
+                        <button onClick={() => setShowDeliveryInfo(true)} className="flex flex-col items-center justify-center gap-2 py-4 bg-zinc-50 border border-zinc-200 hover:border-black hover:bg-white transition-all group">
+                            <Truck size={20} className="text-zinc-400 group-hover:text-black transition-colors" /> 
+                            <span className="font-jura font-bold text-xs uppercase">Доставка и Сроки</span>
+                        </button>
                     </div>
                 </div>
 
-                <div className="mb-6">
-                    <FancyButton fullWidth variant="solid" onClick={handleAddToCart}>ДОБАВИТЬ В КОРЗИНУ</FancyButton>
+                <div className="mt-8 pt-8 border-t border-black lg:hidden">
+                    <h3 className="font-jura font-bold uppercase text-xl mb-4">О ТОВАРЕ</h3>
+                    <p className="font-montserrat text-sm text-zinc-700 leading-relaxed">
+                        {product.description}
+                    </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                    <button onClick={() => setShowSizeGuide(true)} className="flex items-center justify-center gap-2 py-3 border border-zinc-300 hover:border-black transition-colors font-mono text-xs uppercase"><Ruler size={14} /> Таблица размеров</button>
-                    <button onClick={() => setShowDeliveryInfo(true)} className="flex items-center justify-center gap-2 py-3 border border-zinc-300 hover:border-black transition-colors font-mono text-xs uppercase"><Clock size={14} /> Сроки и Доставка</button>
-                </div>
-
-                <a href="https://t.me/your_telegram_username" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-3 w-full py-4 bg-blue-50 text-blue-900 border border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all duration-300 group"><Send size={18} className="group-hover:-translate-y-1 group-hover:translate-x-1 transition-transform" /><span className="font-jura font-bold uppercase tracking-wider">Связаться в Telegram</span></a>
+                <a href="https://t.me/your_telegram_username" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-3 w-full py-4 mt-8 bg-blue-50 text-blue-900 border border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all duration-300 group"><Send size={18} className="group-hover:-translate-y-1 group-hover:translate-x-1 transition-transform" /><span className="font-jura font-bold uppercase tracking-wider">Связаться в Telegram</span></a>
             </div>
           </div>
         </div>
@@ -363,9 +365,6 @@ const ProductDetail: React.FC = () => {
                 <PromoSequence />
             </div>
         </div>
-
-        {/* ... Recommendations Sections kept same as before ... */}
-        
       </div>
       
       <SizeGuideModal isOpen={showSizeGuide} onClose={() => setShowSizeGuide(false)} />

@@ -11,6 +11,19 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const INITIAL_PRODUCTS: Product[] = [];
 const INITIAL_COLLECTIONS: Collection[] = [];
 
+// UX: Friendly Error Messages for RPC responses
+const RPC_ERROR_MAPPING: Record<string, string> = {
+    'Insufficient stock': 'К сожалению, выбранный размер только что закончился.',
+    'Variant not found': 'Ошибка данных: вариант товара не найден.',
+    'Promo code usage limit reached': 'Лимит использования этого промокода исчерпан.',
+    'Order amount too low for this promo code': 'Сумма заказа недостаточна для применения промокода.',
+    'Promo code is for VIP only': 'Этот промокод доступен только для VIP клиентов (Whales).',
+    'Not enough points': 'На вашем счету недостаточно баллов.',
+    'Cannot pay more than 50% with points': 'Баллами можно оплатить не более 50% от суммы заказа.',
+    'Product not found': 'Один из товаров больше недоступен.',
+    'default': 'Произошла ошибка при оформлении заказа. Пожалуйста, обратитесь в поддержку.'
+};
+
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
@@ -46,8 +59,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   // --- 1. FETCH PUBLIC DATA (PRODUCTS, COLLECTIONS, CONFIG, ARTICLES) ---
   const fetchPublicData = async () => {
       try {
-          const productPromise = supabase.from('products').select('*');
-          const variantPromise = supabase.from('product_variants').select('*');
+          // SECURITY: STRICT SELECT to prevent 'cost_price' leakage to public client
+          // We explicitly list fields instead of using '*'
+          const productPromise = supabase.from('products')
+            .select('id, name, price, description, images, category, collection_ids, is_new, is_hidden, is_vip_only, release_date');
+            
+          const variantPromise = supabase.from('product_variants').select('product_id, size, stock'); // Only needed fields
           const collectionPromise = supabase.from('collections').select('*');
           const promoPromise = supabase.from('promocodes').select('*');
           const configPromise = supabase.from('site_config').select('*').single(); 
@@ -70,7 +87,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                       isNew: p.is_new,
                       isHidden: p.is_hidden,
                       isVipOnly: p.is_vip_only,
-                      cost_price: p.cost_price, 
+                      // cost_price is deliberately excluded here
                       releaseDate: p.release_date, 
                       variants: productVariants
                   };
@@ -134,6 +151,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const updateUserProfile = async (updates: Partial<UserProfile>) => {
       if (!user) return;
       try {
+          // SECURITY NOTE: RLS Policies on the backend MUST prevent updating 'loyalty_points' or 'role' here.
+          // This call should only succeed for safe fields (address, phone, name).
           const { error } = await supabase
             .from('profiles')
             .update(updates)
@@ -483,130 +502,62 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     }
   }
 
-  // --- ORDERS LOGIC (SECURED) ---
+  // --- ORDERS LOGIC (SECURED ATOMIC RPC) ---
   const createOrder = async (orderData: Omit<Order, 'id' | 'created_at'>, pointsUsed: number = 0) => {
       const { data: { session } } = await supabase.auth.getSession();
-      const currentUserId = session?.user?.id || null;
-
-      // 1. RE-VERIFY PRICES AND STOCK SERVER-SIDE
-      const { data: dbProducts } = await supabase.from('products').select('id, price');
       
-      let verifiedSubtotal = 0;
-      const verifiedItems = orderData.order_items.map(item => {
-          const dbItem = dbProducts?.find(p => p.id === item.id);
-          const realPrice = dbItem ? dbItem.price : item.price;
-          verifiedSubtotal += realPrice * item.quantity;
-          return { ...item, price: realPrice }; 
-      });
-
-      // 2. Re-calculate Promo with ADVANCED Logic (Validation again)
-      let discountAmount = 0;
-      let finalPromoCode = activePromo ? activePromo.code : null;
-
-      if (activePromo) {
-          const { data: promoCheck } = await supabase
-            .from('promocodes')
-            .select('*')
-            .eq('code', activePromo.code)
-            .single();
-          
-          if (promoCheck && promoCheck.is_active) {
-              const limitReached = promoCheck.usage_limit && promoCheck.usage_count >= promoCheck.usage_limit;
-              const minAmountMet = verifiedSubtotal >= (promoCheck.min_order_amount || 0);
-              
-              if (!limitReached && minAmountMet) {
-                  if (activePromo.discount_type === 'fixed') {
-                      discountAmount = activePromo.discount_value;
-                  } else {
-                      const value = activePromo.discount_value;
-                      discountAmount = Math.round(verifiedSubtotal * (value / 100));
-                  }
-              } else {
-                  finalPromoCode = null;
-                  discountAmount = 0;
-              }
-          } else {
-              finalPromoCode = null;
-              discountAmount = 0;
-          }
-      }
-      discountAmount = Math.min(discountAmount, verifiedSubtotal);
-      
-      const deliveryPrice = orderData.customer_info.deliveryMethod === 'cdek_door' ? 550 : 350;
-      const prePointsTotal = verifiedSubtotal - discountAmount + deliveryPrice;
-      const finalTotal = Math.max(0, prePointsTotal - pointsUsed);
-
-      // 3. Create Payload
-      const payload = {
-          ...orderData,
-          total_price: finalTotal, 
-          subtotal: verifiedSubtotal,
-          points_used: pointsUsed, 
-          order_items: verifiedItems, 
-          user_id: currentUserId,
-          customer_info: {
-              ...orderData.customer_info,
-              promoCode: finalPromoCode,
-              discountAmount: discountAmount 
-          }
-      };
-
-      const { error: orderError } = await supabase.from('orders').insert([payload]);
-      
-      if (orderError) {
-          console.error("Order Create Error:", orderError);
-          alert("ОШИБКА СОЗДАНИЯ ЗАКАЗА: " + orderError.message);
+      if (!session?.user) {
+          alert("Пожалуйста, войдите в систему");
           return false;
       }
 
-      // 4. Update Promo Usage Count (If used)
-      if (finalPromoCode && activePromo) {
-          const { data: currentPromo } = await supabase.from('promocodes').select('usage_count').eq('code', finalPromoCode).single();
-          if (currentPromo) {
-              await supabase.from('promocodes').update({ usage_count: currentPromo.usage_count + 1 }).eq('code', finalPromoCode);
+      // Simplified items array for RPC
+      const itemsPayload = orderData.order_items.map(item => ({
+          id: item.id,
+          selectedSize: item.selectedSize,
+          quantity: item.quantity,
+          name: item.name // Added for error reporting in SQL
+      }));
+
+      const deliveryPayload = orderData.customer_info;
+      const promoCode = activePromo ? activePromo.code : null;
+
+      try {
+          // CALL ATOMIC RPC
+          const { data, error } = await supabase.rpc('create_new_order', {
+              p_items: itemsPayload,
+              p_delivery_info: deliveryPayload,
+              p_payment_method: orderData.payment_method,
+              p_promo_code: promoCode,
+              p_points_used: pointsUsed
+          });
+
+          if (error) throw error;
+
+          if (data && data.success) {
+              await fetchPublicData();
+              await fetchUserData(session.user);
+              return true;
+          } else {
+              // RPC Custom Error Handling
+              // Check if the error message is in our map, otherwise generic default
+              const rawError = data?.error || 'Unknown server error';
+              const userMessage = Object.entries(RPC_ERROR_MAPPING).find(([key]) => rawError.includes(key))?.[1] || rawError;
+              
+              alert("ОШИБКА: " + userMessage);
+              return false;
           }
+
+      } catch (err: any) {
+          console.error("Atomic Order Create Error:", err);
+          
+          // Network or System errors
+          const rawError = err.message || 'Unknown error';
+          const userMessage = Object.entries(RPC_ERROR_MAPPING).find(([key]) => rawError.includes(key))?.[1] || RPC_ERROR_MAPPING['default'];
+          
+          alert(userMessage);
+          return false;
       }
-
-      // 5. Update User Points (If used)
-      if (currentUserId && pointsUsed > 0 && userProfile) {
-          const newPoints = Math.max(0, (userProfile.loyalty_points || 0) - pointsUsed);
-          await supabase.from('profiles').update({ loyalty_points: newPoints }).eq('id', currentUserId);
-          setUserProfile(prev => prev ? { ...prev, loyalty_points: newPoints } : null);
-      }
-
-      // 6. Decrement Stock & Log Inventory
-      for (const item of orderData.order_items) {
-          const variant = products
-              .find(p => p.id === item.id)
-              ?.variants?.find(v => v.size === item.selectedSize);
-
-          if (variant) {
-              const newStock = Math.max(0, variant.stock - item.quantity);
-              await supabase
-                  .from('product_variants')
-                  .update({ stock: newStock })
-                  .eq('id', variant.id);
-
-              await supabase.from('inventory_logs').insert({
-                  product_id: item.id,
-                  variant_size: item.selectedSize,
-                  change_amount: -item.quantity, 
-                  reason: 'new_order',
-                  user_id: currentUserId
-              });
-          }
-      }
-
-      if (currentUserId) {
-          await supabase.from('profiles').update({ current_cart: [] }).eq('id', currentUserId);
-      }
-
-      await fetchPublicData();
-      if (session?.user) {
-          await fetchUserData(session.user);
-      }
-      
-      return true;
   };
 
   const updateOrderStatus = async (id: string, status: OrderStatus, trackingNumber?: string) => {
@@ -615,6 +566,22 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       
       const { error } = await supabase.from('orders').update(updates).eq('id', id);
       if (!error && user) await fetchUserData(user); 
+  };
+
+  // --- PAY FOR ORDER (SIMULATION) ---
+  const payForOrder = async (orderId: string): Promise<boolean> => {
+      try {
+          // In a real app, this would redirect to a gateway.
+          // Here we just update the status to 'paid'.
+          const { error } = await supabase.from('orders').update({ status: 'paid' }).eq('id', orderId);
+          if (error) throw error;
+          
+          if (user) await fetchUserData(user);
+          return true;
+      } catch (e: any) {
+          alert("Ошибка оплаты: " + e.message);
+          return false;
+      }
   };
 
   const applyPromoCode = async (code: string): Promise<{success: boolean, message?: string}> => {
@@ -626,10 +593,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       if (promo.usage_limit !== null && promo.usage_count >= promo.usage_limit) return { success: false, message: 'Лимит использования исчерпан' };
       const currentSubtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
       if (promo.min_order_amount > 0 && currentSubtotal < promo.min_order_amount) return { success: false, message: `Работает от ${promo.min_order_amount} ₽` };
+      
+      // Dynamic VIP Check
       if (promo.target_audience === 'vip_only') {
           const spent = userProfile?.total_spent || 0;
-          if (spent < 10000) return { success: false, message: 'Только для VIP клиентов' };
+          const threshold = siteConfig?.vip_threshold || 15000;
+          if (spent < threshold) return { success: false, message: 'Только для VIP клиентов' };
       }
+      
       if (promo.target_audience === 'new_users') {
           if (userOrders.length > 0) return { success: false, message: 'Только для новых клиентов' };
       }
@@ -696,6 +667,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       deleteCollection,
       createOrder,
       updateOrderStatus,
+      payForOrder, // NEW
       applyPromoCode,
       removePromoCode,
       addPromoCodeDb,

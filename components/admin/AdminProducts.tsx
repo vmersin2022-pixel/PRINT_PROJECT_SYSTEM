@@ -53,15 +53,22 @@ const AdminProducts: React.FC = () => {
     
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // --- 1. FETCH DATA DIRECTLY FROM SUPABASE ---
-    const fetchProducts = async () => {
+    // --- 1. FETCH DATA (SERVER SIDE FILTERING) ---
+    const fetchProducts = async (queryStr: string = '') => {
         setLoading(true);
         try {
-            // Fetch products AND their variants
-            const { data: prodData, error: prodError } = await supabase
+            let query = supabase
                 .from('products')
                 .select('*, variants:product_variants(*)')
                 .order('name', { ascending: true });
+
+            // SERVER-SIDE SEARCH
+            if (queryStr) {
+                // ILIKE performs case-insensitive pattern matching
+                query = query.or(`name.ilike.%${queryStr}%,id.ilike.%${queryStr}%`);
+            }
+
+            const { data: prodData, error: prodError } = await query;
 
             if (prodError) throw prodError;
 
@@ -87,9 +94,19 @@ const AdminProducts: React.FC = () => {
         }
     };
 
+    // Initial Fetch
     useEffect(() => {
         fetchProducts();
     }, []);
+
+    // Debounced Search Effect
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchProducts(searchQuery);
+        }, 500); // Wait 500ms after user stops typing
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     // --- 2. HANDLERS ---
 
@@ -141,7 +158,7 @@ const AdminProducts: React.FC = () => {
         try {
             await supabase.from('product_variants').delete().eq('product_id', id);
             await supabase.from('products').delete().eq('id', id);
-            fetchProducts();
+            fetchProducts(searchQuery);
             refreshData(); // Sync frontend context
         } catch (e) {
             handleError(e);
@@ -258,7 +275,7 @@ const AdminProducts: React.FC = () => {
             }
 
             setIsEditorOpen(false);
-            fetchProducts();
+            fetchProducts(searchQuery);
             refreshData(); // Sync Global Context
             
         } catch (e: any) {
@@ -267,12 +284,6 @@ const AdminProducts: React.FC = () => {
             setUploading(false);
         }
     };
-
-    // --- RENDER HELPERS ---
-    const filteredProducts = products.filter(p => 
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        p.id.toLowerCase().includes(searchQuery.toLowerCase())
-    );
 
     return (
         <div className="relative h-full min-h-[600px]">
@@ -313,10 +324,10 @@ const AdminProducts: React.FC = () => {
                     <tbody className="divide-y divide-zinc-100 text-sm">
                         {loading ? (
                             <tr><td colSpan={6} className="p-8 text-center"><Loader2 className="animate-spin inline"/> Loading Data...</td></tr>
-                        ) : filteredProducts.length === 0 ? (
-                            <tr><td colSpan={6} className="p-8 text-center text-zinc-400">СКЛАД ПУСТ</td></tr>
+                        ) : products.length === 0 ? (
+                            <tr><td colSpan={6} className="p-8 text-center text-zinc-400">СКЛАД ПУСТ / НИЧЕГО НЕ НАЙДЕНО</td></tr>
                         ) : (
-                            filteredProducts.map(p => {
+                            products.map(p => {
                                 const totalStock = p.variants?.reduce((acc, v) => acc + v.stock, 0) || 0;
                                 return (
                                     <tr key={p.id} className="hover:bg-blue-50/30 group">
@@ -382,14 +393,14 @@ const AdminProducts: React.FC = () => {
                     {/* Header */}
                     <div className="p-6 border-b border-black flex justify-between items-center bg-zinc-50">
                         <h2 className="font-jura text-2xl font-bold uppercase">
-                            {editingId ? 'РЕДАКТИРОВАНИЕ ТОВАРА' : 'НОВЫЙ ТОВАР'}
+                            {editingId ? 'РЕДАКТИРОВАНИЕ ТОВАРА' : 'НОВАЯ КАРТОЧКА'}
                         </h2>
                         <button onClick={() => setIsEditorOpen(false)} className="hover:rotate-90 transition-transform"><X size={24}/></button>
                     </div>
 
                     {/* Scrollable Form */}
                     <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                        
+                        {/* ... (Form Content Same as Before) ... */}
                         {/* 1. VISUALS */}
                         <section>
                             <h3 className="font-bold text-sm uppercase mb-4 flex items-center gap-2 text-blue-900"><ImageIcon size={16}/> Визуал</h3>

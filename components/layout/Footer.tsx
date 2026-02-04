@@ -1,7 +1,11 @@
+
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useApp } from '../../context';
 
 const Footer: React.FC = () => {
+  const { userProfile } = useApp();
+
   return (
     <footer className="bg-black text-white pt-16 pb-8 px-4 border-t-4 border-blue-900">
       <div className="container mx-auto">
@@ -44,11 +48,11 @@ const Footer: React.FC = () => {
               <div className="flex gap-2 items-end">
                 <input 
                   type="email" 
-                  placeholder="ENTER_EMAIL" 
-                  className="bg-transparent border-b border-zinc-600 text-white w-full focus:outline-none focus:border-blue-500 font-mono text-sm py-1 placeholder-zinc-700 transition-colors"
+                  placeholder="EMAIL" 
+                  className="bg-transparent border-b border-zinc-600 text-white w-full focus:outline-none focus:border-blue-500 font-mono text-sm py-1 placeholder-zinc-700 transition-colors uppercase"
                 />
-                <button className="text-blue-500 font-bold font-jura hover:text-white transition-colors tracking-widest text-sm">
-                  INIT
+                <button className="text-blue-500 font-bold font-jura hover:text-white transition-colors tracking-widest text-sm uppercase">
+                  ПОДПИСАТЬСЯ
                 </button>
               </div>
             </div>
@@ -72,13 +76,18 @@ const Footer: React.FC = () => {
                 <div className="flex items-center gap-2 mt-4 md:mt-0">
                     <span className="w-1.5 h-1.5 bg-green-900 rounded-full animate-pulse"></span>
                     <span>SYSTEM STATUS:</span>
-                    <Link 
-                    to="/admin" 
-                    className="hover:text-zinc-500 transition-colors cursor-crosshair select-none"
-                    title="SYS_ROOT_ACCESS"
-                    >
-                    OPERATIONAL
-                    </Link>
+                    {/* Only show Link to Admin if user is admin */}
+                    {userProfile?.role === 'admin' ? (
+                        <Link 
+                            to="/admin" 
+                            className="hover:text-zinc-500 transition-colors cursor-crosshair select-none text-red-900"
+                            title="SYS_ROOT_ACCESS"
+                        >
+                            OPERATIONAL (ADMIN)
+                        </Link>
+                    ) : (
+                        <span className="select-none">OPERATIONAL</span>
+                    )}
                 </div>
             </div>
         </div>

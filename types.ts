@@ -158,6 +158,7 @@ export interface SiteConfig {
   announcement_text: string;
   sale_mode: boolean;
   sale_end_date?: string;
+  vip_threshold?: number; // NEW FIELD for Phase 2
 }
 
 // NEW: Journal Article
@@ -221,6 +222,7 @@ export interface AppContextType {
   // Orders
   createOrder: (order: Omit<Order, 'id' | 'created_at'>, pointsUsed?: number) => Promise<boolean>; // UPDATED Signature
   updateOrderStatus: (id: string, status: OrderStatus, trackingNumber?: string) => Promise<void>;
+  payForOrder: (orderId: string) => Promise<boolean>; // NEW for Edge Case
 
   // Promocodes
   applyPromoCode: (code: string) => Promise<{success: boolean, message?: string}>; // CHANGED return type
