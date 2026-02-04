@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { supabase } from "../supabaseClient";
 
@@ -55,10 +56,10 @@ export const aiService = {
                 .getPublicUrl(tempFileName);
 
             const enhancedPrompt = encodeURIComponent(
-                `${promptText}, wearing t-shirt with this print design, professional fashion photography, cyberpunk aesthetic, 8k resolution`
+                `${promptText}, wearing t-shirt with this print design, professional fashion photography, cyberpunk aesthetic, 8k resolution, highly detailed texture, grunge style background`
             );
             
-            // Оставляем image.pollinations.ai, но ключ передаем ТОЛЬКО в URL
+            // Используем официальный endpoint
             const baseUrl = `https://image.pollinations.ai/prompt/${enhancedPrompt}`;
             
             const params = new URLSearchParams({
@@ -68,13 +69,15 @@ export const aiService = {
                 nologo: 'true',
                 enhance: 'true',
                 image: publicUrl,
-                key: POLLINATIONS_KEY // Ключ здесь
+                key: POLLINATIONS_KEY 
             });
 
             const url = `${baseUrl}?${params.toString()}`;
 
-            // УДАЛИЛИ Headers, чтобы не было ошибки CORS
-            const response = await fetch(url, { method: 'GET' });
+            // FIX: Removed Authorization header to prevent CORS errors. Key is passed in URL.
+            const response = await fetch(url, {
+                method: 'GET'
+            });
 
             if (!response.ok) {
                 const errText = await response.text();
