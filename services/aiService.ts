@@ -75,7 +75,7 @@ export const aiService = {
         `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-1.5-flash',
             contents: prompt,
             config: { responseMimeType: "application/json" }
         });
@@ -93,7 +93,7 @@ export const aiService = {
         const base64Data = await resizeImage(imageFile);
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
+            model: 'gemini-1.5-flash-image',
             contents: {
                 parts: [
                     { inlineData: { mimeType: 'image/jpeg', data: base64Data } },
