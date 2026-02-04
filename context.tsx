@@ -589,8 +589,15 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       const { data, error } = await supabase.from('promocodes').select('*').eq('code', cleanCode).single();
       if (error || !data) return { success: false, message: 'Промокод не найден' };
       const promo = data as PromoCode;
+      
       if (!promo.is_active) return { success: false, message: 'Промокод отключен' };
-      if (promo.usage_limit !== null && promo.usage_count >= promo.usage_limit) return { success: false, message: 'Лимит использования исчерпан' };
+      
+      // Strict undefined check logic fix
+      const hasUsageLimit = typeof promo.usage_limit === 'number';
+      if (hasUsageLimit && promo.usage_limit !== undefined && promo.usage_count >= promo.usage_limit) {
+          return { success: false, message: 'Лимит использования исчерпан' };
+      }
+      
       const currentSubtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
       if (promo.min_order_amount > 0 && currentSubtotal < promo.min_order_amount) return { success: false, message: `Работает от ${promo.min_order_amount} ₽` };
       
@@ -616,13 +623,14 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
   const addPromoCodeDb = async (promo: Partial<PromoCode>) => {
       await supabase.from('promocodes').insert([{ 
-          code: promo.code?.toUpperCase(), 
-          discount_value: promo.discount_value,
-          discount_type: promo.discount_type,
+          code: promo.code?.toUpperCase() || 'UNKNOWN', 
+          discount_value: promo.discount_value || 0,
+          discount_type: promo.discount_type || 'percent',
           is_active: true,
-          usage_limit: promo.usage_limit ?? null, // FIX TS18048
-          min_order_amount: promo.min_order_amount,
-          target_audience: promo.target_audience
+          // Explicit null check for DB strictness
+          usage_limit: typeof promo.usage_limit === 'number' ? promo.usage_limit : null, 
+          min_order_amount: promo.min_order_amount || 0,
+          target_audience: promo.target_audience || 'all'
       }]);
       await fetchPublicData();
   };
