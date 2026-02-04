@@ -2,22 +2,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { Product, ProductVariant, Category } from '../../types';
-import { Plus, Search, Edit2, Trash2, X, UploadCloud, Save, Loader2, Image as ImageIcon, AlertTriangle, Calendar, Lock, Coins } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, X, UploadCloud, Save, Loader2, Image as ImageIcon, AlertTriangle, Calendar, Lock, Coins, Sparkles, Wand2, Camera, Cpu } from 'lucide-react';
 import { useApp } from '../../context';
 import { getImageUrl } from '../../utils';
+import { GoogleGenAI } from "@google/genai";
 
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'OS'];
 const CATEGORIES: Category[] = ['t-shirts', 'sets', 'accessories', 'fresh_drop', 'last_drop'];
 
+// DEFAULT PROMPT FOR IMAGE GEN
+const DEFAULT_IMAGE_PROMPT = "Крупный макроснимок белой хлопковой ткани, на которой нанесён этот типографский принт. Ракурс низкий и слегка диагональный, камера расположена очень близко к поверхности, создавая ощущение глубины и фокус на текстуре ткани. Экспозиция мягкая и светлая, с рассеянным дневным светом, подчёркивающим матовую поверхность материала и мелкие волокна. Принт выполнен методом дтф: буквы выглядят плотно нанесёнными и слегка глянцевыми. Хорошо различима лёгкая фактура чернил, создающая рельеф. На ткани видны мелкие ворсинки, что добавляет реалистичности. Глубина резкости мала: передний план и центр изображения в резком фокусе, края плавно размыты.";
+
 interface ProductFormData {
     name: string;
     price: string;
-    costPrice: string; // NEW: Cost Price input
+    costPrice: string;
     description: string;
     categories: Category[];
     collectionIds: string[];
     images: string[];
-    variants: Record<string, number>; // Size -> Stock mapping
+    variants: Record<string, number>;
     isHidden: boolean;
     isNew: boolean;
     isVipOnly: boolean;
@@ -40,7 +44,7 @@ const INITIAL_FORM: ProductFormData = {
 };
 
 const AdminProducts: React.FC = () => {
-    const { refreshData, collections } = useApp(); // Used to trigger global update after changes
+    const { refreshData, collections } = useApp();
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -51,9 +55,17 @@ const AdminProducts: React.FC = () => {
     const [formData, setFormData] = useState<ProductFormData>(INITIAL_FORM);
     const [uploading, setUploading] = useState(false);
     
+    // AI State
+    const [aiTextLoading, setAiTextLoading] = useState(false);
+    const [aiImageLoading, setAiImageLoading] = useState(false);
+    const [aiImagePrompt, setAiImagePrompt] = useState(DEFAULT_IMAGE_PROMPT);
+    const [aiPrintFile, setAiPrintFile] = useState<File | null>(null);
+    const [aiGeneratedImage, setAiGeneratedImage] = useState<string | null>(null); // Base64
+    
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const aiPrintInputRef = useRef<HTMLInputElement>(null);
 
-    // --- 1. FETCH DATA (SERVER SIDE FILTERING) ---
+    // --- 1. FETCH DATA ---
     const fetchProducts = async (queryStr: string = '') => {
         setLoading(true);
         try {
@@ -62,9 +74,7 @@ const AdminProducts: React.FC = () => {
                 .select('*, variants:product_variants(*)')
                 .order('name', { ascending: true });
 
-            // SERVER-SIDE SEARCH
             if (queryStr) {
-                // ILIKE performs case-insensitive pattern matching
                 query = query.or(`name.ilike.%${queryStr}%,id.ilike.%${queryStr}%`);
             }
 
@@ -72,14 +82,12 @@ const AdminProducts: React.FC = () => {
 
             if (prodError) throw prodError;
 
-            // Transform DB data (snake_case) to frontend types (camelCase)
             const formatted: Product[] = prodData.map((p: any) => ({
                 ...p,
-                // Map snake_case from DB to camelCase for App
                 isNew: p.is_new,
                 isHidden: p.is_hidden,
                 isVipOnly: p.is_vip_only,
-                cost_price: p.cost_price, // NEW MAPPING
+                cost_price: p.cost_price,
                 collectionIds: p.collection_ids || [], 
                 categories: typeof p.category === 'string' ? p.category.split(',').filter((c:string) => c) : [],
                 variants: p.variants || [],
@@ -94,21 +102,159 @@ const AdminProducts: React.FC = () => {
         }
     };
 
-    // Initial Fetch
     useEffect(() => {
         fetchProducts();
     }, []);
 
-    // Debounced Search Effect
     useEffect(() => {
         const timer = setTimeout(() => {
             fetchProducts(searchQuery);
-        }, 500); // Wait 500ms after user stops typing
-
+        }, 500);
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    // --- 2. HANDLERS ---
+    // --- AI HANDLERS ---
+
+    const handleAiTextGen = async () => {
+        if (!formData.name) {
+            alert('Введите хотя бы черновое название товара для контекста');
+            return;
+        }
+        setAiTextLoading(true);
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const prompt = `
+                Ты креативный директор киберпанк-бренда одежды "PRINT PROJECT". 
+                Твой стиль: сухой, технический, футуристичный, "system logs". 
+                Используй термины: 'PROTOCOL', 'UNIT', 'DATA', 'SYSTEM', 'FABRIC_SHELL'.
+                
+                Входные данные товара:
+                Название (черновик): "${formData.name}"
+                Категории: ${formData.categories.join(', ')}
+                
+                Задача:
+                1. Придумай крутое название товара. Стиль: "T-SHIRT [CODE_NAME]" или "HOODIE [SYSTEM_ID]".
+                2. Напиши описание товара (до 300 символов). Опиши крой, ткань (хлопок), ощущения. Без эмодзи. Используй CAPS LOCK для акцентов.
+                
+                Верни ответ ТОЛЬКО в формате JSON:
+                {
+                    "name": "string",
+                    "description": "string"
+                }
+            `;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: prompt,
+                config: { responseMimeType: "application/json" }
+            });
+
+            const text = response.text;
+            if (text) {
+                const json = JSON.parse(text);
+                setFormData(prev => ({
+                    ...prev,
+                    name: json.name || prev.name,
+                    description: json.description || prev.description
+                }));
+            }
+        } catch (e: any) {
+            console.error("AI Text Error", e);
+            alert("AI Error: " + e.message);
+        } finally {
+            setAiTextLoading(false);
+        }
+    };
+
+    const handleAiImageGen = async () => {
+        if (!aiPrintFile) {
+            alert('Сначала загрузите изображение принта (PNG/JPG)');
+            return;
+        }
+        if (!aiImagePrompt) {
+            alert('Введите промт');
+            return;
+        }
+        setAiImageLoading(true);
+        setAiGeneratedImage(null);
+
+        try {
+            // Convert File to Base64
+            const reader = new FileReader();
+            reader.readAsDataURL(aiPrintFile);
+            
+            reader.onloadend = async () => {
+                const base64Data = reader.result?.toString().split(',')[1];
+                if (!base64Data) {
+                    setAiImageLoading(false);
+                    return;
+                }
+
+                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                
+                // Using Gemini 2.5 Flash Image (Nano Banana) for generation/editing
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash-image',
+                    contents: {
+                        parts: [
+                            { inlineData: { mimeType: aiPrintFile.type, data: base64Data } },
+                            { text: aiImagePrompt }
+                        ]
+                    }
+                });
+
+                // Extract Image from Response
+                let imageFound = false;
+                if (response.candidates && response.candidates[0].content.parts) {
+                    for (const part of response.candidates[0].content.parts) {
+                        if (part.inlineData) {
+                            setAiGeneratedImage(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
+                            imageFound = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!imageFound) {
+                    alert("Не удалось сгенерировать изображение. Попробуйте изменить промт.");
+                }
+                setAiImageLoading(false);
+            };
+
+        } catch (e: any) {
+            console.error("AI Image Error", e);
+            alert("AI Error: " + e.message);
+            setAiImageLoading(false);
+        }
+    };
+
+    const handleSaveAiImage = async () => {
+        if (!aiGeneratedImage) return;
+        setUploading(true);
+        try {
+            // Convert DataURL to Blob to File
+            const res = await fetch(aiGeneratedImage);
+            const blob = await res.blob();
+            const file = new File([blob], `ai_lookbook_${Date.now()}.png`, { type: 'image/png' });
+
+            const fileName = `ai_gen_${Date.now()}.png`;
+            const { error: uploadError } = await supabase.storage.from('images').upload(fileName, file);
+            if (uploadError) throw uploadError;
+
+            const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+            
+            setFormData(prev => ({ ...prev, images: [...prev.images, data.publicUrl] }));
+            setAiGeneratedImage(null);
+            setAiPrintFile(null); // Reset
+            
+        } catch (e: any) {
+            alert('Ошибка сохранения: ' + e.message);
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    // --- STANDARD HANDLERS ---
 
     const handleEdit = (product: Product) => {
         const variantMap: Record<string, number> = {};
@@ -130,42 +276,36 @@ const AdminProducts: React.FC = () => {
             isHidden: product.isHidden || false,
             isNew: product.isNew || false,
             isVipOnly: product.isVipOnly || false,
-            // Format for datetime-local input: YYYY-MM-DDThh:mm
             releaseDate: product.releaseDate ? new Date(product.releaseDate).toISOString().slice(0, 16) : ''
         });
         setEditingId(product.id);
         setIsEditorOpen(true);
+        // Reset AI state
+        setAiGeneratedImage(null);
+        setAiPrintFile(null);
     };
 
     const handleCreate = () => {
         setFormData(INITIAL_FORM);
         setEditingId(null);
         setIsEditorOpen(true);
-    };
-
-    const handleError = (e: any) => {
-        console.error(e);
-        if (e.message?.includes('row-level security') || e.code === '42501') {
-            alert('⛔ ОШИБКА ДОСТУПА (RLS)\n\nSupabase блокирует сохранение.\n1. Зайдите в Supabase -> Table Editor -> products (и product_variants)\n2. Нажмите "RLS Active" -> "Disable RLS"');
-        } else {
-            alert('Ошибка: ' + e.message);
-        }
+        // Reset AI state
+        setAiGeneratedImage(null);
+        setAiPrintFile(null);
     };
 
     const handleDelete = async (id: string) => {
         if (!window.confirm('Вы уверены? Это действие нельзя отменить.')) return;
-        
         try {
             await supabase.from('product_variants').delete().eq('product_id', id);
             await supabase.from('products').delete().eq('id', id);
             fetchProducts(searchQuery);
-            refreshData(); // Sync frontend context
-        } catch (e) {
-            handleError(e);
+            refreshData(); 
+        } catch (e: any) {
+            alert('Ошибка: ' + e.message);
         }
     };
 
-    // --- 3. IMAGE UPLOAD ---
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         setUploading(true);
@@ -176,22 +316,14 @@ const AdminProducts: React.FC = () => {
         for (const file of files) {
             const fileExt = file.name.split('.').pop();
             const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-            const filePath = `${fileName}`;
-
+            
             try {
-                // Upload to Supabase Storage 'images' bucket
-                const { error: uploadError } = await supabase.storage
-                    .from('images')
-                    .upload(filePath, file);
-
+                const { error: uploadError } = await supabase.storage.from('images').upload(fileName, file);
                 if (uploadError) throw uploadError;
-
-                // Get Public URL
-                const { data } = supabase.storage.from('images').getPublicUrl(filePath);
+                const { data } = supabase.storage.from('images').getPublicUrl(fileName);
                 newImages.push(data.publicUrl);
             } catch (error) {
                 console.error('Upload failed:', error);
-                alert(`Ошибка загрузки ${file.name}`);
             }
         }
 
@@ -207,61 +339,44 @@ const AdminProducts: React.FC = () => {
         }));
     };
 
-    // --- 4. SAVE TO DB ---
     const handleSave = async () => {
         if (!formData.name || !formData.price) {
             alert('Заполните название и цену');
             return;
         }
-
-        setUploading(true); // Reuse loading state
+        setUploading(true);
         
         try {
-            // Prepare payload - MAPPING TO DB COLUMNS (snake_case)
             const productPayload = {
                 name: formData.name,
                 price: parseFloat(formData.price),
-                cost_price: formData.costPrice ? parseFloat(formData.costPrice) : 0, // NEW
+                cost_price: formData.costPrice ? parseFloat(formData.costPrice) : 0,
                 description: formData.description,
-                category: formData.categories.join(','), // CSV string for categories
-                collection_ids: formData.collectionIds,  // Send as JSON array (Supabase handles it)
+                category: formData.categories.join(','),
+                collection_ids: formData.collectionIds,
                 images: formData.images,
-                is_new: formData.isNew,       // DB: is_new
-                is_hidden: formData.isHidden,  // DB: is_hidden
-                is_vip_only: formData.isVipOnly, // DB: is_vip_only
+                is_new: formData.isNew,
+                is_hidden: formData.isHidden,
+                is_vip_only: formData.isVipOnly,
                 release_date: formData.releaseDate ? new Date(formData.releaseDate).toISOString() : null
             };
 
             let productId = editingId;
 
             if (editingId) {
-                // UPDATE
-                const { error } = await supabase
-                    .from('products')
-                    .update(productPayload)
-                    .eq('id', editingId);
+                const { error } = await supabase.from('products').update(productPayload).eq('id', editingId);
                 if (error) throw error;
             } else {
-                // INSERT
-                const { data, error } = await supabase
-                    .from('products')
-                    .insert([productPayload])
-                    .select()
-                    .single();
+                const { data, error } = await supabase.from('products').insert([productPayload]).select().single();
                 if (error) throw error;
                 productId = data.id;
             }
 
-            // HANDLE VARIANTS (Delete all old, insert new)
             if (productId) {
-                // 1. Delete existing
-                if (editingId) {
-                    await supabase.from('product_variants').delete().eq('product_id', productId);
-                }
+                if (editingId) await supabase.from('product_variants').delete().eq('product_id', productId);
                 
-                // 2. Insert new
                 const variantsPayload = Object.entries(formData.variants)
-                    .filter(([_, stock]) => (stock as number) >= 0) // Allow 0 stock
+                    .filter(([_, stock]) => (stock as number) >= 0)
                     .map(([size, stock]) => ({
                         product_id: productId,
                         size,
@@ -276,10 +391,10 @@ const AdminProducts: React.FC = () => {
 
             setIsEditorOpen(false);
             fetchProducts(searchQuery);
-            refreshData(); // Sync Global Context
+            refreshData();
             
         } catch (e: any) {
-            handleError(e);
+            alert('Ошибка: ' + e.message);
         } finally {
             setUploading(false);
         }
@@ -380,30 +495,115 @@ const AdminProducts: React.FC = () => {
                 </table>
             </div>
 
-            {/* --- EDITOR DRAWER (SLIDE OVER) --- */}
+            {/* --- EDITOR DRAWER --- */}
             <div 
                 className={`fixed inset-0 z-[100] transition-all duration-300 ${isEditorOpen ? 'bg-black/40 pointer-events-auto' : 'pointer-events-none'}`}
                 onClick={() => setIsEditorOpen(false)}
             >
                 <div 
                     onClick={e => e.stopPropagation()}
-                    className={`absolute right-0 top-0 h-full w-full max-w-2xl bg-white shadow-2xl border-l border-black transform transition-transform duration-300 flex flex-col ${isEditorOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                    className={`absolute right-0 top-0 h-full w-full max-w-3xl bg-white shadow-2xl border-l border-black transform transition-transform duration-300 flex flex-col ${isEditorOpen ? 'translate-x-0' : 'translate-x-full'}`}
                 >
                     
                     {/* Header */}
                     <div className="p-6 border-b border-black flex justify-between items-center bg-zinc-50">
-                        <h2 className="font-jura text-2xl font-bold uppercase">
-                            {editingId ? 'РЕДАКТИРОВАНИЕ ТОВАРА' : 'НОВАЯ КАРТОЧКА'}
-                        </h2>
+                        <div className="flex items-center gap-2">
+                            <h2 className="font-jura text-2xl font-bold uppercase">
+                                {editingId ? 'РЕДАКТИРОВАНИЕ' : 'СОЗДАНИЕ'}
+                            </h2>
+                            {!editingId && <span className="text-xs font-mono bg-blue-600 text-white px-2 py-1 rounded">NEW</span>}
+                        </div>
                         <button onClick={() => setIsEditorOpen(false)} className="hover:rotate-90 transition-transform"><X size={24}/></button>
                     </div>
 
                     {/* Scrollable Form */}
                     <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                        {/* ... (Form Content Same as Before) ... */}
+                        
+                        {/* --- AI LAB SECTION --- */}
+                        <div className="bg-gradient-to-r from-zinc-50 to-blue-50/30 p-6 border border-zinc-200 relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Cpu size={100} /></div>
+                            <h3 className="font-bold text-sm uppercase mb-4 flex items-center gap-2 text-blue-900 relative z-10">
+                                <Sparkles size={16} className="text-blue-500 animate-pulse"/> AI LAB: NEURAL ENGINE
+                            </h3>
+
+                            <div className="grid grid-cols-2 gap-6 relative z-10">
+                                {/* TEXT GEN */}
+                                <div className="border-r border-zinc-200 pr-6">
+                                    <p className="text-[10px] font-mono text-zinc-500 mb-2 uppercase font-bold flex items-center gap-1"><Wand2 size={10}/> 1. TEXT CO-PILOT</p>
+                                    <p className="text-[10px] text-zinc-400 mb-2 leading-tight">Генерация названия и описания на основе данных.</p>
+                                    <button 
+                                        onClick={handleAiTextGen}
+                                        disabled={aiTextLoading}
+                                        className="w-full border border-blue-200 bg-white text-blue-900 py-2 text-xs font-bold uppercase hover:bg-blue-600 hover:text-white transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        {aiTextLoading ? <Loader2 className="animate-spin" size={14}/> : <Wand2 size={14}/>} 
+                                        AUTO-COMPLETE
+                                    </button>
+                                </div>
+
+                                {/* IMAGE GEN */}
+                                <div>
+                                    <p className="text-[10px] font-mono text-zinc-500 mb-2 uppercase font-bold flex items-center gap-1"><Camera size={10}/> 2. NANO BANANA (LOOKBOOK)</p>
+                                    <p className="text-[10px] text-zinc-400 mb-2 leading-tight">Генерация фото товара по принту.</p>
+                                    
+                                    <div className="flex gap-2 mb-2">
+                                        <button 
+                                            onClick={() => aiPrintInputRef.current?.click()}
+                                            className="flex-1 border border-dashed border-zinc-400 p-2 text-[10px] uppercase text-zinc-500 hover:border-black hover:text-black transition-colors truncate text-center"
+                                        >
+                                            {aiPrintFile ? aiPrintFile.name : '[+] UPLOAD PRINT'}
+                                        </button>
+                                        <input ref={aiPrintInputRef} type="file" accept="image/*" className="hidden" onChange={e => setAiPrintFile(e.target.files?.[0] || null)} />
+                                    </div>
+                                    
+                                    <textarea 
+                                        className="w-full border p-2 text-[9px] font-mono h-16 resize-none mb-2 focus:border-blue-500 outline-none"
+                                        value={aiImagePrompt}
+                                        onChange={e => setAiImagePrompt(e.target.value)}
+                                        placeholder="PROMPT..."
+                                    />
+
+                                    <button 
+                                        onClick={handleAiImageGen}
+                                        disabled={aiImageLoading || !aiPrintFile}
+                                        className="w-full bg-black text-white py-2 text-xs font-bold uppercase hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                                    >
+                                        {aiImageLoading ? <Loader2 className="animate-spin" size={14}/> : <Camera size={14}/>} 
+                                        RENDER IMAGE
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* GENERATED IMAGE PREVIEW */}
+                            {aiGeneratedImage && (
+                                <div className="mt-4 border-t border-zinc-200 pt-4 flex gap-4 animate-fade-in items-start">
+                                    <div className="w-24 h-32 bg-zinc-100 border border-black shrink-0 relative">
+                                        <img src={aiGeneratedImage} className="w-full h-full object-cover" />
+                                        <div className="absolute top-0 right-0 bg-green-500 w-2 h-2"/>
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-xs font-bold uppercase mb-2 text-green-700">GENERATION COMPLETE</p>
+                                        <button 
+                                            onClick={handleSaveAiImage}
+                                            disabled={uploading}
+                                            className="bg-blue-600 text-white px-4 py-2 text-xs font-bold uppercase hover:bg-blue-700 transition-colors w-full md:w-auto flex items-center justify-center gap-2"
+                                        >
+                                            {uploading ? 'SAVING...' : <><Save size={12}/> SAVE TO GALLERY</>}
+                                        </button>
+                                        <button 
+                                            onClick={() => setAiGeneratedImage(null)}
+                                            className="block mt-2 text-[10px] text-red-500 hover:underline"
+                                        >
+                                            DISCARD
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         {/* 1. VISUALS */}
                         <section>
-                            <h3 className="font-bold text-sm uppercase mb-4 flex items-center gap-2 text-blue-900"><ImageIcon size={16}/> Визуал</h3>
+                            <h3 className="font-bold text-sm uppercase mb-4 flex items-center gap-2 text-blue-900"><ImageIcon size={16}/> Галерея</h3>
                             
                             <div className="grid grid-cols-4 gap-4 mb-4">
                                 {formData.images.map((img, idx) => (
@@ -504,7 +704,7 @@ const AdminProducts: React.FC = () => {
                                         onChange={e => setFormData({...formData, isVipOnly: e.target.checked})}
                                         className="w-4 h-4 accent-black"
                                     />
-                                    <span className="font-mono text-xs uppercase font-bold text-black flex items-center gap-1"><Lock size={10}/> VIP ONLY (ЗАКРЫТЫЙ ДОСТУП)</span>
+                                    <span className="font-mono text-xs uppercase font-bold text-black flex items-center gap-1"><Lock size={10}/> VIP ONLY</span>
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer select-none">
                                     <input 
@@ -550,16 +750,12 @@ const AdminProducts: React.FC = () => {
                                     </div>
                                 ))}
                              </div>
-                             <div className="mt-2 text-[10px] text-zinc-400 font-mono text-right">
-                                 * Укажите 0, чтобы размер был SOLD OUT
-                             </div>
                         </section>
 
                         {/* 4. METADATA */}
                         <section>
                              <h3 className="font-bold text-sm uppercase mb-4 text-blue-900">Категории и Коллекции</h3>
                              <div className="mb-4">
-                                <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-2">Категории</label>
                                 <div className="flex flex-wrap gap-2">
                                     {CATEGORIES.map(cat => (
                                         <button
@@ -580,7 +776,6 @@ const AdminProducts: React.FC = () => {
                              </div>
 
                              <div>
-                                <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-2">Коллекции</label>
                                 <div className="flex flex-wrap gap-2">
                                     {collections.map(col => (
                                         <button
@@ -597,7 +792,6 @@ const AdminProducts: React.FC = () => {
                                             {col.title}
                                         </button>
                                     ))}
-                                    {/* Hardcoded 'duo' check if needed */}
                                     <button
                                          onClick={() => {
                                             const has = formData.collectionIds.includes('duo');
@@ -608,7 +802,7 @@ const AdminProducts: React.FC = () => {
                                         }}
                                         className={`text-xs px-3 py-1 border uppercase font-mono transition-colors ${formData.collectionIds.includes('duo') ? 'bg-blue-900 text-white border-blue-900' : 'bg-white text-zinc-500 border-zinc-300'}`}
                                     >
-                                        FOR DUO (ПАРОЧКИ)
+                                        FOR DUO
                                     </button>
                                 </div>
                              </div>
