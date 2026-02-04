@@ -120,9 +120,16 @@ const AdminProducts: React.FC = () => {
             alert('Введите хотя бы черновое название товара для контекста');
             return;
         }
+        
+        const apiKey = (import.meta as any).env.VITE_API_KEY;
+        if (!apiKey) {
+            alert('Ошибка: API ключ не найден (VITE_API_KEY)');
+            return;
+        }
+
         setAiTextLoading(true);
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey });
             const prompt = `
                 Ты креативный директор киберпанк-бренда одежды "PRINT PROJECT". 
                 Твой стиль: сухой, технический, футуристичный, "system logs". 
@@ -175,6 +182,13 @@ const AdminProducts: React.FC = () => {
             alert('Введите промт');
             return;
         }
+        
+        const apiKey = (import.meta as any).env.VITE_API_KEY;
+        if (!apiKey) {
+            alert('Ошибка: API ключ не найден (VITE_API_KEY)');
+            return;
+        }
+
         setAiImageLoading(true);
         setAiGeneratedImage(null);
 
@@ -190,7 +204,7 @@ const AdminProducts: React.FC = () => {
                     return;
                 }
 
-                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+                const ai = new GoogleGenAI({ apiKey });
                 
                 // Using Gemini 2.5 Flash Image (Nano Banana) for generation/editing
                 const response = await ai.models.generateContent({
