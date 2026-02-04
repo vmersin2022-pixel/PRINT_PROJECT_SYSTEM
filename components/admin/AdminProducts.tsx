@@ -5,7 +5,7 @@ import { Product, ProductVariant, Category } from '../../types';
 import { Plus, Search, Edit2, Trash2, X, UploadCloud, Save, Loader2, Image as ImageIcon, AlertTriangle, Calendar, Lock, Coins, Sparkles, Wand2, Camera, Cpu } from 'lucide-react';
 import { useApp } from '../../context';
 import { getImageUrl } from '../../utils';
-import { GoogleGenAI } from "@google/genai";
+import { aiService } from '../../services/aiService';
 
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'OS'];
 const CATEGORIES: Category[] = ['t-shirts', 'sets', 'accessories', 'fresh_drop', 'last_drop'];
@@ -113,7 +113,7 @@ const AdminProducts: React.FC = () => {
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    // --- AI HANDLERS ---
+    // --- AI HANDLERS (USING SERVICE) ---
 
     const handleAiTextGen = async () => {
         if (!formData.name) {
@@ -121,50 +121,14 @@ const AdminProducts: React.FC = () => {
             return;
         }
         
-        const apiKey = (import.meta as any).env.VITE_API_KEY;
-        if (!apiKey) {
-            alert('Ошибка: API ключ не найден (VITE_API_KEY)');
-            return;
-        }
-
         setAiTextLoading(true);
         try {
-            const ai = new GoogleGenAI({ apiKey });
-            const prompt = `
-                Ты креативный директор киберпанк-бренда одежды "PRINT PROJECT". 
-                Твой стиль: сухой, технический, футуристичный, "system logs". 
-                Используй термины: 'PROTOCOL', 'UNIT', 'DATA', 'SYSTEM', 'FABRIC_SHELL'.
-                
-                Входные данные товара:
-                Название (черновик): "${formData.name}"
-                Категории: ${formData.categories.join(', ')}
-                
-                Задача:
-                1. Придумай крутое название товара. Стиль: "T-SHIRT [CODE_NAME]" или "HOODIE [SYSTEM_ID]".
-                2. Напиши описание товара (до 300 символов). Опиши крой, ткань (хлопок), ощущения. Без эмодзи. Используй CAPS LOCK для акцентов.
-                
-                Верни ответ ТОЛЬКО в формате JSON:
-                {
-                    "name": "string",
-                    "description": "string"
-                }
-            `;
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: { responseMimeType: "application/json" }
-            });
-
-            const text = response.text;
-            if (text) {
-                const json = JSON.parse(text);
-                setFormData(prev => ({
-                    ...prev,
-                    name: json.name || prev.name,
-                    description: json.description || prev.description
-                }));
-            }
+            const result = await aiService.generateProductDescription(formData.name, formData.categories);
+            setFormData(prev => ({
+                ...prev,
+                name: result.name || prev.name,
+                description: result.description || prev.description
+            }));
         } catch (e: any) {
             console.error("AI Text Error", e);
             alert("AI Error: " + e.message);
@@ -183,61 +147,16 @@ const AdminProducts: React.FC = () => {
             return;
         }
         
-        const apiKey = (import.meta as any).env.VITE_API_KEY;
-        if (!apiKey) {
-            alert('Ошибка: API ключ не найден (VITE_API_KEY)');
-            return;
-        }
-
         setAiImageLoading(true);
         setAiGeneratedImage(null);
 
         try {
-            // Convert File to Base64
-            const reader = new FileReader();
-            reader.readAsDataURL(aiPrintFile);
-            
-            reader.onloadend = async () => {
-                const base64Data = reader.result?.toString().split(',')[1];
-                if (!base64Data) {
-                    setAiImageLoading(false);
-                    return;
-                }
-
-                const ai = new GoogleGenAI({ apiKey });
-                
-                // Using Gemini 2.5 Flash Image (Nano Banana) for generation/editing
-                const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash-image',
-                    contents: {
-                        parts: [
-                            { inlineData: { mimeType: aiPrintFile.type, data: base64Data } },
-                            { text: aiImagePrompt }
-                        ]
-                    }
-                });
-
-                // Extract Image from Response
-                let imageFound = false;
-                if (response.candidates && response.candidates[0].content.parts) {
-                    for (const part of response.candidates[0].content.parts) {
-                        if (part.inlineData) {
-                            setAiGeneratedImage(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
-                            imageFound = true;
-                            break;
-                        }
-                    }
-                }
-                
-                if (!imageFound) {
-                    alert("Не удалось сгенерировать изображение. Попробуйте изменить промт.");
-                }
-                setAiImageLoading(false);
-            };
-
+            const base64Image = await aiService.generateLookbook(aiPrintFile, aiImagePrompt);
+            setAiGeneratedImage(base64Image);
         } catch (e: any) {
             console.error("AI Image Error", e);
             alert("AI Error: " + e.message);
+        } finally {
             setAiImageLoading(false);
         }
     };
