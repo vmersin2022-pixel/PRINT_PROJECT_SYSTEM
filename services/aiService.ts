@@ -13,8 +13,10 @@ const getClient = () => {
 const POLLINATIONS_KEY = 'sk_DMSauMBAFPyU4FTGlQDeXofP6TOLH3Q2';
 
 export const aiService = {
+    // 1. Генерация текста (Google Gemini 3 Flash)
     generateProductDescription: async (name: string, categories: string[]) => {
         const ai = getClient();
+        
         const prompt = `
             Ты креативный директор киберпанк-бренда одежды "PRINT PROJECT". 
             Стиль: сухой, технический, "system logs". 
@@ -27,7 +29,9 @@ export const aiService = {
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: prompt,
-                config: { responseMimeType: "application/json" }
+                config: {
+                    responseMimeType: "application/json"
+                }
             });
 
             const text = response.text;
@@ -39,27 +43,30 @@ export const aiService = {
         }
     },
 
+    // 2. Генерация изображений (Pollinations.ai / Flux Schnell)
+    // ОБНОВЛЕНО: Возвращаем прямую ссылку, без fetch внутри кода
     generateLookbook: async (imageFile: File, promptText: string) => {
-        let tempFileName: string | null = null;
         try {
+            // 1. Сначала загружаем файл в Supabase, чтобы получить публичную ссылку
             const fileExt = imageFile.name.split('.').pop();
-            tempFileName = `temp_gen_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+            const tempFileName = `temp_gen_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
             
             const { error: uploadError } = await supabase.storage
                 .from('images')
                 .upload(tempFileName, imageFile);
 
-            if (uploadError) throw new Error("Ошибка загрузки файла: " + uploadError.message);
+            if (uploadError) throw new Error("Ошибка загрузки файла для обработки: " + uploadError.message);
 
             const { data: { publicUrl } } = supabase.storage
                 .from('images')
                 .getPublicUrl(tempFileName);
 
+            // 2. Формируем URL для Pollinations
+            // Нейросеть сама скачает картинку по publicUrl
             const enhancedPrompt = encodeURIComponent(
                 `${promptText}, wearing t-shirt with this print design, professional fashion photography, cyberpunk aesthetic, 8k resolution, highly detailed texture, grunge style background`
             );
             
-            // Используем официальный endpoint
             const baseUrl = `https://image.pollinations.ai/prompt/${enhancedPrompt}`;
             
             const params = new URLSearchParams({
@@ -72,34 +79,15 @@ export const aiService = {
                 key: POLLINATIONS_KEY 
             });
 
-            const url = `${baseUrl}?${params.toString()}`;
-
-            // FIX: Removed Authorization header to prevent CORS errors. Key is passed in URL.
-            const response = await fetch(url, {
-                method: 'GET'
-            });
-
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`Pollinations API Error: ${response.status} ${errText}`);
-            }
-            
-            const blob = await response.blob();
-
-            return await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
+            // 3. Возвращаем готовую ссылку
+            // Браузер загрузит её через <img src="..."> без ошибок CORS
+            return `${baseUrl}?${params.toString()}`;
 
         } catch (e: any) {
             console.error("AI Image Error", e);
             throw new Error(e.message || "Не удалось сгенерировать изображение.");
-        } finally {
-            if (tempFileName) {
-                await supabase.storage.from('images').remove([tempFileName]);
-            }
         }
+        // Примечание: Временный файл (tempFileName) не удаляем сразу, 
+        // чтобы Pollinations успел его скачать.
     }
 };
