@@ -11,6 +11,9 @@ const getClient = () => {
     return new GoogleGenAI({ apiKey });
 };
 
+// Pollinations API Key provided by user
+const POLLINATIONS_KEY = 'sk_DMSauMBAFPyU4FTGlQDeXofP6TOLH3Q2';
+
 export const aiService = {
     // 1. Генерация текста (Google Gemini 3 Flash)
     generateProductDescription: async (name: string, categories: string[]) => {
@@ -43,26 +46,50 @@ export const aiService = {
     },
 
     // 2. Генерация изображений (Pollinations.ai / Flux Schnell)
-    // ОБНОВЛЕНО: Используем метод POST для прямой отправки файла
+    // ОБНОВЛЕНО: Используем метод GET с API Key и ссылкой на изображение
     generateLookbook: async (imageFile: File, promptText: string) => {
+        let tempFileName: string | null = null;
         try {
-            // Формируем URL с параметрами
-            // enhance=true позволяет нейросети немного "додумать" детали промпта
+            // 1. Сначала загружаем файл в Supabase, чтобы получить публичную ссылку
+            // Pollinations через GET не умеет принимать файлы напрямую, только URL
+            const fileExt = imageFile.name.split('.').pop();
+            tempFileName = `temp_gen_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+            
+            const { error: uploadError } = await supabase.storage
+                .from('images')
+                .upload(tempFileName, imageFile);
+
+            if (uploadError) throw new Error("Ошибка загрузки файла для обработки: " + uploadError.message);
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('images')
+                .getPublicUrl(tempFileName);
+
+            // 2. Формируем GET запрос к Pollinations с API Key
             const enhancedPrompt = encodeURIComponent(
                 `${promptText}, wearing t-shirt with this print design, professional fashion photography, cyberpunk aesthetic, volumetric lighting, 8k resolution, highly detailed texture, grunge style background`
             );
             
-            // Адрес Pollinations для генерации
-            const pollinationsUrl = `https://image.pollinations.ai/prompt/${enhancedPrompt}?width=1024&height=1280&model=flux&nologo=true&enhance=true`;
+            // Используем официальный endpoint
+            const baseUrl = `https://image.pollinations.ai/prompt/${enhancedPrompt}`;
+            
+            const params = new URLSearchParams({
+                width: '1024',
+                height: '1280',
+                model: 'flux',
+                nologo: 'true',
+                enhance: 'true',
+                image: publicUrl, // Передаем ссылку на наш принт
+                key: POLLINATIONS_KEY // Передаем API ключ
+            });
 
-            // Отправляем запрос методом POST, вкладывая сам файл в тело запроса.
-            // Это обходит проблему с Supabase URL и ошибками 502.
-            const response = await fetch(pollinationsUrl, {
-                method: 'POST',
-                body: imageFile,
+            const url = `${baseUrl}?${params.toString()}`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                // Дублируем ключ в заголовке для надежности
                 headers: {
-                    // Указываем тип контента, чтобы сервер понял, что это картинка
-                    'Content-Type': imageFile.type || 'image/png', 
+                    'Authorization': `Bearer ${POLLINATIONS_KEY}`
                 }
             });
 
@@ -73,7 +100,7 @@ export const aiService = {
             
             const blob = await response.blob();
 
-            // Конвертируем результат (Blob) в Base64 для отображения в браузере
+            // 3. Конвертируем результат в Base64 для отображения
             return await new Promise<string>((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onloadend = () => resolve(reader.result as string);
@@ -84,6 +111,11 @@ export const aiService = {
         } catch (e: any) {
             console.error("AI Image Error", e);
             throw new Error(e.message || "Не удалось сгенерировать изображение.");
+        } finally {
+            // 4. Очищаем временный файл из Supabase
+            if (tempFileName) {
+                await supabase.storage.from('images').remove([tempFileName]);
+            }
         }
     }
 };
