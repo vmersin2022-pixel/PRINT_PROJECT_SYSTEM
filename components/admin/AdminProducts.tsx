@@ -10,8 +10,8 @@ import { aiService } from '../../services/aiService';
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'OS'];
 const CATEGORIES: Category[] = ['t-shirts', 'sets', 'accessories', 'fresh_drop', 'last_drop'];
 
-// DEFAULT PROMPT FOR IMAGE GEN
-const DEFAULT_IMAGE_PROMPT = "Крупный макроснимок белой хлопковой ткани, на которой нанесён этот типографский принт. Ракурс низкий и слегка диагональный, камера расположена очень близко к поверхности, создавая ощущение глубины и фокус на текстуре ткани. Экспозиция мягкая и светлая, с рассеянным дневным светом, подчёркивающим матовую поверхность материала и мелкие волокна. Принт выполнен методом дтф: буквы выглядят плотно нанесёнными и слегка глянцевыми. Хорошо различима лёгкая фактура чернил, создающая рельеф. На ткани видны мелкие ворсинки, что добавляет реалистичности. Глубина резкости мала: передний план и центр изображения в резком фокусе, края плавно размыты.";
+// DEFAULT PROMPT FOR IMAGE GEN (Optimized for Flux/Pollinations)
+const DEFAULT_IMAGE_PROMPT = "A cool model wearing a black oversized t-shirt with the provided print design on chest. Urban cyberpunk environment, neon lights, cinematic shot, hyperrealistic, 8k, fashion lookbook style.";
 
 interface ProductFormData {
     name: string;
@@ -143,8 +143,7 @@ const AdminProducts: React.FC = () => {
             return;
         }
         if (!aiImagePrompt) {
-            alert('Введите промт');
-            return;
+            setAiImagePrompt(DEFAULT_IMAGE_PROMPT);
         }
         
         setAiImageLoading(true);
@@ -474,10 +473,10 @@ const AdminProducts: React.FC = () => {
                                     </button>
                                 </div>
 
-                                {/* IMAGE GEN */}
+                                {/* IMAGE GEN (POLLINATIONS) */}
                                 <div>
-                                    <p className="text-[10px] font-mono text-zinc-500 mb-2 uppercase font-bold flex items-center gap-1"><Camera size={10}/> 2. NANO BANANA (LOOKBOOK)</p>
-                                    <p className="text-[10px] text-zinc-400 mb-2 leading-tight">Генерация фото товара по принту.</p>
+                                    <p className="text-[10px] font-mono text-zinc-500 mb-2 uppercase font-bold flex items-center gap-1"><Camera size={10}/> 2. FLUX LOOKBOOK (POLLINATIONS)</p>
+                                    <p className="text-[10px] text-zinc-400 mb-2 leading-tight">Генерация фото на модели.</p>
                                     
                                     <div className="flex gap-2 mb-2">
                                         <button 
@@ -498,7 +497,7 @@ const AdminProducts: React.FC = () => {
 
                                     <button 
                                         onClick={handleAiImageGen}
-                                        disabled={aiImageLoading || !aiPrintFile}
+                                        disabled={aiImageLoading}
                                         className="w-full bg-black text-white py-2 text-xs font-bold uppercase hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                                     >
                                         {aiImageLoading ? <Loader2 className="animate-spin" size={14}/> : <Camera size={14}/>} 

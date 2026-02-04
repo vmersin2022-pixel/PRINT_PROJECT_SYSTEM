@@ -1,5 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
+import { supabase } from "../supabaseClient";
 
 // Инициализация через официальный метод нового SDK
 const getClient = () => {
@@ -7,43 +8,11 @@ const getClient = () => {
     if (!apiKey || apiKey === "undefined") {
         throw new Error("API Key не найден! Проверьте VITE_API_KEY в настройках Vercel.");
     }
-    // В новом SDK параметры передаются объектом
     return new GoogleGenAI({ apiKey });
 };
 
-// Хелпер для сжатия изображений
-const resizeImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target?.result as string;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                const MAX_SIZE = 1024; // Оптимальный размер для нейросети
-                if (width > height) {
-                    if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
-                } else {
-                    if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
-                }
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx?.drawImage(img, 0, 0, width, height);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                resolve(dataUrl.split(',')[1]); // Возвращаем чистый base64
-            };
-            img.onerror = (err) => reject(err);
-        };
-        reader.onerror = (err) => reject(err);
-    });
-};
-
 export const aiService = {
-    // 1. Генерация текста (Используем Gemini 3 Flash)
+    // 1. Генерация текста (Остается на Google Gemini 3 Flash - он работает отлично)
     generateProductDescription: async (name: string, categories: string[]) => {
         const ai = getClient();
         
@@ -55,56 +24,64 @@ export const aiService = {
             Верни ТОЛЬКО JSON объект.
         `;
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json"
-            }
-        });
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json"
+                }
+            });
 
-        // В новом SDK .text - это геттер, а не функция
-        const text = response.text;
-        if (!text) throw new Error("Пустой ответ от нейросети");
-        return JSON.parse(text);
+            const text = response.text;
+            if (!text) throw new Error("Пустой ответ от нейросети");
+            return JSON.parse(text);
+        } catch (error: any) {
+            console.error("AI Text Error:", error);
+            throw new Error("Ошибка генерации текста: " + error.message);
+        }
     },
 
-    // 2. Генерация/Редактирование изображений (Используем Gemini 2.5 Flash Image)
+    // 2. Генерация изображений (Переход на Pollinations.ai / Flux Schnell)
     generateLookbook: async (imageFile: File, promptText: string) => {
-        const ai = getClient();
-        const base64Data = await resizeImage(imageFile);
+        try {
+            // ШАГ 1: Загружаем принт в Supabase, чтобы получить публичную ссылку
+            // Pollinations нужны URL картинки-референса
+            const fileExt = imageFile.name.split('.').pop();
+            const fileName = `temp_ref_${Date.now()}.${fileExt}`;
+            
+            const { error: uploadError } = await supabase.storage.from('images').upload(fileName, imageFile);
+            if (uploadError) throw new Error("Ошибка загрузки референса: " + uploadError.message);
 
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: {
-                parts: [
-                    { 
-                        inlineData: { 
-                            mimeType: 'image/jpeg', 
-                            data: base64Data 
-                        } 
-                    },
-                    { text: promptText }
-                ]
-            }
-        });
+            const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(fileName);
 
-        // Safe optional chaining for TS compatibility
-        const candidate = response.candidates?.[0];
-        if (candidate?.content?.parts) {
-            for (const part of candidate.content.parts) {
-                if (part.inlineData) {
-                    return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-                }
-            }
+            // ШАГ 2: Формируем запрос к Pollinations
+            // Используем модель 'flux' (Flux Schnell) для скорости и качества
+            // Добавляем стиль в промт
+            const enhancedPrompt = encodeURIComponent(
+                `${promptText}, wearing t-shirt with this print design, professional fashion photography, cyberpunk aesthetic, volumetric lighting, 8k resolution, highly detailed texture, grunge style background`
+            );
+            
+            // Параметр &image=URL заставляет модель использовать нашу картинку как основу
+            const pollinationsUrl = `https://image.pollinations.ai/prompt/${enhancedPrompt}?image=${encodeURIComponent(publicUrl)}&width=1024&height=1280&model=flux&nologo=true&enhance=true`;
+
+            // ШАГ 3: Скачиваем результат
+            const response = await fetch(pollinationsUrl);
+            if (!response.ok) throw new Error("Pollinations API Error");
+            
+            const blob = await response.blob();
+
+            // ШАГ 4: Конвертируем в Base64 для предпросмотра
+            return await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+
+        } catch (e: any) {
+            console.error("AI Image Error", e);
+            throw new Error(e.message || "Не удалось сгенерировать изображение.");
         }
-        
-        // Если изображение не вернулось, возможно модель вернула текст (ошибку или описание)
-        if (response.text) {
-            console.warn("AI Response Text:", response.text);
-            throw new Error("Нейросеть вернула текст вместо изображения. Попробуйте упростить промт.");
-        }
-
-        throw new Error("Не удалось сгенерировать изображение.");
     }
 };
