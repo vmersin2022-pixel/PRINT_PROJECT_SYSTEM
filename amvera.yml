@@ -7,9 +7,10 @@ meta:
 build:
   additionalCommands:
     - npm install
-    - npm run build # Создаст папку dist
+    - npm run build
+  artifacts:
+    dist: dist
 
 run:
-  # Используем npx serve для раздачи папки dist
   command: npx serve -s dist -l 3000
   containerPort: 3000
