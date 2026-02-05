@@ -9,7 +9,7 @@ build:
     - npm install
     - npm run build
   artifacts:
-    dist: dist
+    - dist
 
 run:
   command: npx serve -s dist -l 3000
