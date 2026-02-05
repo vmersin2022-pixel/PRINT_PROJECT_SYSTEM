@@ -1,0 +1,10 @@
+meta:
+  environment: node
+  toolchain:
+    name: browser
+    version: 20
+
+build:
+  # Amvera сама сделает npm install && npm run build
+  artifacts:
+    "main/*": /
