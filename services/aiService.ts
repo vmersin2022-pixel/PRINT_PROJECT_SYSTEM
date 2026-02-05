@@ -1,71 +1,93 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { supabase } from "../supabaseClient";
 
 const getClient = () => {
-    // В Amvera добавь переменную VITE_API_KEY в разделе Конфигурация
     const apiKey = (import.meta as any).env.VITE_API_KEY;
     if (!apiKey || apiKey === "undefined") {
-        throw new Error("API Key не найден! Проверьте переменные окружения.");
+        throw new Error("API Key не найден! Проверьте VITE_API_KEY в настройках Amvera.");
     }
     return new GoogleGenAI({ apiKey });
 };
 
+// Pollinations key (optional, can be empty or specific if you have one)
+const POLLINATIONS_KEY = 'sk_DMSauMBAFPyU4FTGlQDeXofP6TOLH3Q2';
+
 export const aiService = {
-    // 1. Генерация текста (Nano Banana Flash)
+    // 1. Генерация текста (Gemini 3 Flash)
     generateProductDescription: async (name: string, categories: string[]) => {
         const ai = getClient();
-        // Используем актуальную модель 3.0 (Nano Banana)
-        const model = ai.getGenerativeModel({ model: "gemini-3-flash" });
         
         const prompt = `
-            Ты креативный директор бренда "PRINT PROJECT". 
-            Стиль: "system logs", технический, футуристичный.
+            Ты креативный директор киберпанк-бренда одежды "PRINT PROJECT". 
+            Стиль: сухой, технический, "system logs". 
             Данные: Название "${name}", Категории: ${categories.join(', ')}.
-            Задача: Придумай короткое название (name) и описание (description) в стиле логов системы.
-            Верни ТОЛЬКО JSON: {"name": "...", "description": "..."}
+            Задача: Придумай название (name) и описание (description).
+            Верни ТОЛЬКО JSON объект.
         `;
 
         try {
-            const result = await model.generateContent(prompt);
-            const text = result.response.text();
-            // Очистка от markdown если нейронка его добавит
-            const cleanJson = text.replace(/```json|```/g, "");
-            return JSON.parse(cleanJson);
-        } catch (e) {
-            console.error("AI Text Error", e);
-            return { name, description: "SYSTEM_ERROR: Не удалось сгенерировать описание." };
+            // Updated SDK Syntax
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json"
+                }
+            });
+
+            const text = response.text;
+            if (!text) throw new Error("Пустой ответ от нейросети");
+            return JSON.parse(text);
+        } catch (error: any) {
+            console.error("AI Text Error:", error);
+            return { name: name, description: "Ошибка генерации описания. " + error.message };
         }
     },
 
-    // 2. Визуализация принта (Nano Banana Pro / Image Guidance)
-    generatePreview: async (promptText: string, printImageBase64?: string) => {
-        const ai = getClient();
-        // Для работы с изображениями в 3.0 используем Pro версию
-        const model = ai.getGenerativeModel({ model: "gemini-3-pro-visual-preview" });
-
+    // 2. Генерация изображений (Flux через Pollinations)
+    // Переименовали generatePreview -> generateLookbook для совместимости с компонентом
+    generateLookbook: async (imageFile: File, promptText: string) => {
         try {
-            if (printImageBase64) {
-                // Если есть принт, используем Image-to-Image (Nano Banana Pro)
-                const result = await model.generateContent([
-                    `Apply this design to a high-quality oversized t-shirt. 
-                     Context: ${promptText}. 
-                     Follow fabric folds and lighting. Cyberpunk lookbook style.`,
-                    { inlineData: { data: printImageBase64, mimeType: "image/png" } }
-                ]);
-                // Примечание: Google API вернет описание или обработанную картинку в зависимости от настроек проекта
-                // Если ты хочешь именно генерацию через Pollinations как раньше, оставляем метод ниже
-            }
+            // 1. Сначала загружаем файл в Supabase, чтобы получить публичную ссылку
+            // Это нужно, так как Pollinations принимает URL картинки-исходника
+            const fileExt = imageFile.name.split('.').pop();
+            const tempFileName = `temp_gen_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
             
-            // Запасной стабильный путь через Flux (Pollinations)
+            const { error: uploadError } = await supabase.storage
+                .from('images')
+                .upload(tempFileName, imageFile);
+
+            if (uploadError) throw new Error("Ошибка загрузки файла для обработки: " + uploadError.message);
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('images')
+                .getPublicUrl(tempFileName);
+
+            // 2. Формируем URL для Pollinations
+            // Нейросеть сама скачает картинку по publicUrl и наложит эффект
             const enhancedPrompt = encodeURIComponent(
-                `A professional fashion model wearing a blank streetwear t-shirt with this exact print design: ${promptText}. 
-                 The print is centered on chest, following fabric wrinkles. 8k, urban setting.`
+                `${promptText}, wearing t-shirt with this print design, professional fashion photography, cyberpunk aesthetic, 8k resolution, highly detailed texture, grunge style background`
             );
-            return `https://image.pollinations.ai/prompt/${enhancedPrompt}?width=1024&height=1280&model=flux&nologo=true`;
             
-        } catch (e) {
+            const baseUrl = `https://image.pollinations.ai/prompt/${enhancedPrompt}`;
+            
+            const params = new URLSearchParams({
+                width: '1024',
+                height: '1280',
+                model: 'flux',
+                nologo: 'true',
+                enhance: 'true',
+                image: publicUrl,
+                // key: POLLINATIONS_KEY // Optional if you have a paid key
+            });
+
+            // 3. Возвращаем готовую ссылку
+            return `${baseUrl}?${params.toString()}`;
+
+        } catch (e: any) {
             console.error("AI Image Error", e);
-            throw e;
+            throw new Error(e.message || "Не удалось сгенерировать изображение.");
         }
     }
 };

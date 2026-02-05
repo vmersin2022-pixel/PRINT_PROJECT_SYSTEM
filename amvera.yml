@@ -1,3 +1,4 @@
+
 meta:
   environment: node
   toolchain:
@@ -6,5 +7,6 @@ meta:
 
 build:
   # Amvera сама сделает npm install && npm run build
+  # Vite собирает проект в папку dist, а не main
   artifacts:
-    "main/*": /
+    "dist/*": /
