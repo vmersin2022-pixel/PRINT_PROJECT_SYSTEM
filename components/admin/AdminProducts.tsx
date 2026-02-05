@@ -152,6 +152,7 @@ const AdminProducts: React.FC = () => {
         setImgIsLoading(true); // Prepare for new image load
 
         try {
+            // New logic: Returns a URL string directly
             const imageUrl = await aiService.generateLookbook(aiPrintFile, aiImagePrompt);
             setAiGeneratedImage(imageUrl);
         } catch (e: any) {
@@ -167,7 +168,7 @@ const AdminProducts: React.FC = () => {
         if (!aiGeneratedImage) return;
         setUploading(true);
         try {
-            // Convert URL/DataURL to Blob to File
+            // Convert URL/DataURL to Blob to File for Supabase upload
             const res = await fetch(aiGeneratedImage);
             if (!res.ok) throw new Error('Failed to fetch generated image');
             
@@ -183,10 +184,11 @@ const AdminProducts: React.FC = () => {
             setFormData(prev => ({ ...prev, images: [...prev.images, data.publicUrl] }));
             setAiGeneratedImage(null);
             setAiPrintFile(null); // Reset
+            alert("Изображение сохранено в галерею!");
             
         } catch (e: any) {
             console.error("Save Error", e);
-            alert('Ошибка сохранения: ' + e.message + ' (Возможно CORS ограничение, попробуйте сохранить вручную)');
+            alert('Ошибка сохранения: ' + e.message);
         } finally {
             setUploading(false);
         }
@@ -516,16 +518,24 @@ const AdminProducts: React.FC = () => {
                             {aiGeneratedImage && (
                                 <div className="mt-4 border-t border-zinc-200 pt-4 flex gap-4 animate-fade-in items-start">
                                     <div className="w-24 h-32 bg-zinc-100 border border-black shrink-0 relative flex items-center justify-center">
+                                        {/* SPINNER OVERLAY IF IMAGE IS LOADING */}
                                         {imgIsLoading && (
-                                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-100">
+                                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-100/90 backdrop-blur-sm">
                                                 <Loader2 className="animate-spin text-zinc-400" size={20}/>
                                             </div>
                                         )}
+                                        
                                         <img 
                                             src={aiGeneratedImage} 
+                                            // Handle cross-origin if needed, but 'anonymous' can break if server is strict. 
+                                            // Pollinations is usually open. 
+                                            // We hide image until loaded to avoid flickering.
                                             className={`w-full h-full object-cover transition-opacity duration-300 ${imgIsLoading ? 'opacity-0' : 'opacity-100'}`} 
                                             onLoad={() => setImgIsLoading(false)}
-                                            onError={() => setImgIsLoading(false)} // Fallback for error
+                                            onError={() => {
+                                                setImgIsLoading(false);
+                                                // Optional: alert('Failed to load image preview'); 
+                                            }}
                                         />
                                         {!imgIsLoading && <div className="absolute top-0 right-0 bg-green-500 w-2 h-2"/>}
                                     </div>

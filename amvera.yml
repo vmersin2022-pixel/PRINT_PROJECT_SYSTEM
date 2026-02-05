@@ -1,0 +1,15 @@
+meta:
+  environment: node
+  toolchain:
+    name: npm
+    version: 20
+
+build:
+  additionalCommands:
+    - npm install
+    - npm run build # Создаст папку dist
+
+run:
+  # Используем npx serve для раздачи папки dist
+  command: npx serve -s dist -l 3000
+  containerPort: 3000
