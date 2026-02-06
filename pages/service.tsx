@@ -112,19 +112,19 @@ const SERVICE_DATA: Record<string, { title: string; icon: any; content: React.Re
         <ul className="space-y-3 font-mono text-sm">
             <li className="flex justify-between border-b pb-2">
                 <span>ИП:</span>
-                <span>Иванов Иван Иванович</span>
+                <span>Давлетшина Юлия Вадимовна</span>
             </li>
             <li className="flex justify-between border-b pb-2">
                 <span>ИНН:</span>
-                <span>165000000000</span>
+                <span>165058069923</span>
             </li>
             <li className="flex justify-between border-b pb-2">
                 <span>ОГРНИП:</span>
-                <span>310000000000000</span>
+                <span>323183200007441</span>
             </li>
             <li className="flex justify-between border-b pb-2">
                 <span>Адрес:</span>
-                <span>г. Казань, ул. Баумана, д. 1</span>
+                <span>671310, РОССИЯ, Бурятия Респ, Заиграевский р-н, , п Атхатай, ул Центральная, 2, ,</span>
             </li>
         </ul>
         <p className="text-xs text-zinc-400 mt-4">Публичная оферта доступна для скачивания по запросу.</p>

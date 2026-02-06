@@ -3,18 +3,18 @@ import { GoogleGenAI } from "@google/genai";
 import { supabase } from "../supabaseClient";
 
 const getClient = () => {
+    // В Vite используем import.meta.env. 
+    // Убедитесь, что в Amvera добавлена переменная VITE_API_KEY
     const apiKey = (import.meta as any).env.VITE_API_KEY;
     if (!apiKey || apiKey === "undefined") {
-        throw new Error("API Key не найден! Проверьте VITE_API_KEY в настройках Amvera.");
+        console.error("API Key is missing. Check Amvera environment variables.");
+        throw new Error("API Key не найден! Проверьте VITE_API_KEY.");
     }
     return new GoogleGenAI({ apiKey });
 };
 
-// Pollinations key (optional, can be empty or specific if you have one)
-const POLLINATIONS_KEY = 'sk_DMSauMBAFPyU4FTGlQDeXofP6TOLH3Q2';
-
 export const aiService = {
-    // 1. Генерация текста (Gemini 3 Flash)
+    // 1. Генерация текста (Google Gemini 3 Flash)
     generateProductDescription: async (name: string, categories: string[]) => {
         const ai = getClient();
         
@@ -27,7 +27,7 @@ export const aiService = {
         `;
 
         try {
-            // Updated SDK Syntax
+            // ИСПРАВЛЕНО: Новый синтаксис ai.models.generateContent
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: prompt,
@@ -41,16 +41,15 @@ export const aiService = {
             return JSON.parse(text);
         } catch (error: any) {
             console.error("AI Text Error:", error);
-            return { name: name, description: "Ошибка генерации описания. " + error.message };
+            throw new Error("Ошибка генерации текста: " + error.message);
         }
     },
 
-    // 2. Генерация изображений (Flux через Pollinations)
-    // Переименовали generatePreview -> generateLookbook для совместимости с компонентом
+    // 2. Генерация изображений (Pollinations.ai / Flux Schnell)
+    // Имя функции должно быть generateLookbook, чтобы совпадать с AdminProducts.tsx
     generateLookbook: async (imageFile: File, promptText: string) => {
         try {
-            // 1. Сначала загружаем файл в Supabase, чтобы получить публичную ссылку
-            // Это нужно, так как Pollinations принимает URL картинки-исходника
+            // 1. Загрузка исходника в Supabase
             const fileExt = imageFile.name.split('.').pop();
             const tempFileName = `temp_gen_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
             
@@ -58,14 +57,13 @@ export const aiService = {
                 .from('images')
                 .upload(tempFileName, imageFile);
 
-            if (uploadError) throw new Error("Ошибка загрузки файла для обработки: " + uploadError.message);
+            if (uploadError) throw new Error("Ошибка загрузки файла: " + uploadError.message);
 
             const { data: { publicUrl } } = supabase.storage
                 .from('images')
                 .getPublicUrl(tempFileName);
 
-            // 2. Формируем URL для Pollinations
-            // Нейросеть сама скачает картинку по publicUrl и наложит эффект
+            // 2. Формирование URL для Pollinations
             const enhancedPrompt = encodeURIComponent(
                 `${promptText}, wearing t-shirt with this print design, professional fashion photography, cyberpunk aesthetic, 8k resolution, highly detailed texture, grunge style background`
             );
@@ -79,10 +77,10 @@ export const aiService = {
                 nologo: 'true',
                 enhance: 'true',
                 image: publicUrl,
-                // key: POLLINATIONS_KEY // Optional if you have a paid key
+                // key: POLLINATIONS_KEY // Если есть платный ключ
             });
 
-            // 3. Возвращаем готовую ссылку
+            // 3. Возврат прямой ссылки
             return `${baseUrl}?${params.toString()}`;
 
         } catch (e: any) {
