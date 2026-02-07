@@ -3,12 +3,19 @@ import { GoogleGenAI } from "@google/genai";
 import { supabase } from "../supabaseClient";
 
 const getClient = () => {
-    // В Vite используем import.meta.env. 
-    // Убедитесь, что в Amvera добавлена переменная VITE_API_KEY
-    const apiKey = (import.meta as any).env.VITE_API_KEY;
+    // 1. Безопасное получение ключа (Safe Access)
+    // Используем опциональную цепочку (?.), чтобы приложение не падало, если env еще не загружен
+    let apiKey = (import.meta as any).env?.VITE_API_KEY;
+
+    // 2. Fallback: Если переменные окружения не сработали, используем ключ напрямую
+    // (Это решит вашу проблему "undefined is not an object")
+    if (!apiKey) {
+        apiKey = "AIzaSyBSHOHNqhpsIe7Hu9nBjElbD1uc_vGdDno";
+    }
+
     if (!apiKey || apiKey === "undefined") {
-        console.error("API Key is missing. Check Amvera environment variables.");
-        throw new Error("API Key не найден! Проверьте VITE_API_KEY.");
+        console.error("API Key is missing.");
+        throw new Error("API Key не найден! Проверьте настройки.");
     }
     return new GoogleGenAI({ apiKey });
 };
@@ -27,7 +34,6 @@ export const aiService = {
         `;
 
         try {
-            // ИСПРАВЛЕНО: Новый синтаксис ai.models.generateContent
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: prompt,
@@ -45,47 +51,62 @@ export const aiService = {
         }
     },
 
-    // 2. Генерация изображений (Pollinations.ai / Flux Schnell)
-    // Имя функции должно быть generateLookbook, чтобы совпадать с AdminProducts.tsx
+    // 2. Генерация изображений (Gemini 2.5 Flash Image)
     generateLookbook: async (imageFile: File, promptText: string) => {
         try {
-            // 1. Загрузка исходника в Supabase
-            const fileExt = imageFile.name.split('.').pop();
-            const tempFileName = `temp_gen_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-            
-            const { error: uploadError } = await supabase.storage
-                .from('images')
-                .upload(tempFileName, imageFile);
+            const ai = getClient();
 
-            if (uploadError) throw new Error("Ошибка загрузки файла: " + uploadError.message);
-
-            const { data: { publicUrl } } = supabase.storage
-                .from('images')
-                .getPublicUrl(tempFileName);
-
-            // 2. Формирование URL для Pollinations
-            const enhancedPrompt = encodeURIComponent(
-                `${promptText}, wearing t-shirt with this print design, professional fashion photography, cyberpunk aesthetic, 8k resolution, highly detailed texture, grunge style background`
-            );
-            
-            const baseUrl = `https://image.pollinations.ai/prompt/${enhancedPrompt}`;
-            
-            const params = new URLSearchParams({
-                width: '1024',
-                height: '1280',
-                model: 'flux',
-                nologo: 'true',
-                enhance: 'true',
-                image: publicUrl,
-                // key: POLLINATIONS_KEY // Если есть платный ключ
+            // 1. Конвертация файла в Base64 для отправки в Gemini
+            const base64Data = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(imageFile);
+                reader.onload = () => {
+                    const result = reader.result as string;
+                    // Убираем префикс "data:image/xyz;base64,"
+                    resolve(result.split(',')[1]);
+                };
+                reader.onerror = error => reject(error);
             });
 
-            // 3. Возврат прямой ссылки
-            return `${baseUrl}?${params.toString()}`;
+            // 2. Запрос к модели Gemini
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: {
+                    parts: [
+                        {
+                            inlineData: {
+                                mimeType: imageFile.type,
+                                data: base64Data
+                            }
+                        },
+                        {
+                            text: promptText + "Крупный макроснимок белой хлопковой ткани, на которой нанесён типографский принт (принт приложен к заданию). Ракурс низкий и слегка диагональный, камера расположена очень близко к поверхности, создавая ощущение глубины и фокус на текстуре ткани. Экспозиция мягкая и светлая, с рассеянным дневным светом, подчёркивающим матовую поверхность материала и мелкие волокна.Принт выполнен методом дтф:  буквы выглядят плотно нанесёнными и слегка глянцевыми. Хорошо различима лёгкая фактура чернил, создающая рельеф. На ткани видны мелкие ворсинки, что добавляет реалистичности. Глубина резкости мала: передний план и центр изображения в резком фокусе, края плавно размыты"
+                        }
+                    ]
+                }
+            });
+
+            // 3. Извлечение изображения из ответа
+            let generatedImageBase64 = null;
+            if (response.candidates?.[0]?.content?.parts) {
+                for (const part of response.candidates[0].content.parts) {
+                    if (part.inlineData) {
+                        generatedImageBase64 = part.inlineData.data;
+                        break;
+                    }
+                }
+            }
+
+            if (!generatedImageBase64) {
+                throw new Error("Gemini не вернул изображение. Попробуйте изменить промпт или файл.");
+            }
+
+            // 4. Возвращаем Data URL для отображения в UI
+            return `data:image/png;base64,${generatedImageBase64}`;
 
         } catch (e: any) {
-            console.error("AI Image Error", e);
-            throw new Error(e.message || "Не удалось сгенерировать изображение.");
+            console.error("AI Image Error (Gemini):", e);
+            throw new Error(e.message || "Не удалось сгенерировать изображение через Gemini.");
         }
     }
 };
