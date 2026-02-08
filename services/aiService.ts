@@ -54,18 +54,23 @@ const compressImage = async (file: File): Promise<string> => {
                 return;
             }
             
+            // Белый фон на случай прозрачного PNG (JPEG не поддерживает прозрачность)
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, width, height);
+            
             ctx.drawImage(img, 0, 0, width, height);
 
-            // Конвертируем в JPEG с качеством 0.7 (достаточно для AI)
-            // Это уменьшает размер payload с ~5MB до ~200KB
+            // Конвертируем в JPEG с качеством 0.7 (достаточно для AI, но весит в 10 раз меньше)
             const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
             resolve(dataUrl.split(',')[1]); // Отдаем чистый base64
         };
+        
+        img.onerror = (e) => reject(new Error("Ошибка загрузки изображения в Canvas"));
     });
 };
 
 export const aiService = {
-    // 1. Генерация текста (Gemini 3 Flash)
+    // 1. Генерация текста (Gemini 3 Flash - оптимально по скорости и качеству)
     generateProductDescription: async (name: string, categories: string[]) => {
         const ai = getClient();
         
@@ -102,6 +107,7 @@ export const aiService = {
         let lastError: any;
 
         // СЖИМАЕМ КАРТИНКУ ПЕРЕД ОТПРАВКОЙ
+        // Это самое важное исправление для ошибки 429
         const base64Data = await compressImage(imageFile);
 
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
