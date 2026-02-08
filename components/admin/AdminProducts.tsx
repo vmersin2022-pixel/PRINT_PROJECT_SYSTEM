@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { Product, Category } from '../../types';
-import { Plus, Search, Edit2, Trash2, X, UploadCloud, Save, Loader2, Image as ImageIcon, AlertTriangle, Calendar, Lock, Coins, Sparkles, Wand2, Camera, Cpu, LayoutGrid, Check, RefreshCw, ArrowRight, Terminal, Download, Maximize2, Play, AlertCircle, Clock } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, X, UploadCloud, Save, Loader2, Image as ImageIcon, AlertTriangle, Calendar, Lock, Coins, Sparkles, Wand2, Camera, Cpu, LayoutGrid, Check, RefreshCw, ArrowRight, Terminal, Download, Maximize2 } from 'lucide-react';
 import { useApp } from '../../context';
 import { getImageUrl } from '../../utils';
 import { aiService } from '../../services/aiService';
@@ -14,61 +14,23 @@ const CATEGORIES: Category[] = ['t-shirts', 'sets', 'accessories', 'fresh_drop',
 const PROMPT_PRESETS: Record<string, { label: string, prompt: string }> = {
     'flat_lay': { 
         label: 'Каталожное (Flat Lay)', 
-        prompt: "Премиальный мокап черной футболки из плотного тяжелого хлопка. Футболка сложена стильно, с легким объемом, подчеркивающим крой оверсайз. Лежит на ровной бетонно-серой поверхности. Естественный мягкий свет сбоку, подчеркивающий складки ткани и премиальное качество. Качественное фото для интернет-магазина, резкий фокус, гиперреализм" 
+        prompt: "Professional flat lay photography of a black oversized t-shirt on a clean white background. Soft studio lighting, minimal shadows. High resolution, e-commerce style." 
     },
     'closeup': { 
         label: 'Макро (Принт близко)', 
-        prompt: "Крупный макроснимок белой хлопковой ткани, на которой нанесён типографский принт (принт приложен к заданию). Ракурс низкий и слегка диагональный, камера расположена очень близко к поверхности, создавая ощущение глубины и фокус на текстуре ткани. Экспозиция мягкая и светлая, с рассеянным дневным светом, подчёркивающим матовую поверхность материала и мелкие волокна.Принт выполнен методом дтф:  буквы выглядят плотно нанесёнными и слегка глянцевыми. Хорошо различима лёгкая фактура чернил, создающая рельеф. На ткани видны мелкие ворсинки, что добавляет реалистичности. Глубина резкости мала: передний план и центр изображения в резком фокусе, края плавно размыты" 
+        prompt: "Macro close-up shot of the print texture on fabric. High detail, sharp focus on the ink and fabric texture. Cinematic lighting, depth of field." 
     },
     'model_m': { 
         label: 'Модель (Парень)', 
-        prompt: `ТЫ — ВЕДУЩИЙ ВИЗУАЛЬНЫЙ ХУДОЖНИК В СФЕРЕ STREETWEAR И URBAN FASHION.
-
-ЗАДАЧА:
-Показать парня в чёрной футболке с прикреплённым принтом в уличном лайфстайл-контексте.
-Принт должен быть ТОЧНО СКОПИРОВАН с reference image и выглядеть как реальная печать на ткани.
-
-МОДЕЛЬ:
-- Парень 22–30 лет
-- Современный городской стиль
-- Расслабленная поза
-- Минимальные аксессуары (без отвлечения от принта)
-
-ОДЕЖДА:
-- Чёрная футболка, матовая ткань
-- Принт строго по центру груди
-- Реалистичное взаимодействие принта с тканью
-
-ОКРУЖЕНИЕ:
-- Городской фон (бетон, улица, стена)
-- Фон слегка размытый, акцент на футболке
-
-ОГРАНИЧЕНИЯ:
-- Не изменять принт
-- Не добавлять дополнительные графические элементы
-- Не стилизовать принт под арт или иллюстрацию` 
+        prompt: "Streetwear fashion photography. A stylish young man wearing a black oversized t-shirt with the print. Urban environment, concrete walls, neon lights in background. Cyberpunk vibe." 
     },
     'model_f': { 
         label: 'Модель (Девушка)', 
-        prompt: `ТЫ — ЭКСПЕРТ ПО МАКРО-СЪЁМКЕ ТЕКСТИЛЯ И ПРИНТОВ НА ОДЕЖДЕ.
-
-ЗАДАЧА:
-Показать верхнюю часть торса девушки в чёрной футболке с прикреплённым принтом.
-Основной акцент — качество печати и текстура ткани.
-
-ДЕТАЛИ:
-- Кадр от плеч до груди
-- Видны складки ткани
-- Принт чёткий и реалистичный
-
-ПРИНТ:
-- Полное соответствие reference image
-- Без изменений дизайна
-
-ЗАПРЕТЫ:
-- Не добавлять фильтры
-- Не стилизовать изображение
-- Не менять форму принта` 
+        prompt: "High fashion photography. A cool model girl wearing a black oversized t-shirt with the print. Minimalist studio setting with dramatic lighting. 8k resolution." 
+    },
+    'hanger': {
+        label: 'На вешалке',
+        prompt: "A black t-shirt hanging on a metal rack against a raw concrete wall. Industrial loft style, soft daylight."
     },
     'custom': {
         label: 'CUSTOM INPUT',
@@ -96,7 +58,6 @@ interface GenerationSlot {
     presetKey: string;
     status: 'idle' | 'loading' | 'success' | 'error';
     imageUrl: string | null;
-    errorMsg?: string;
 }
 
 const INITIAL_FORM: ProductFormData = {
@@ -132,8 +93,6 @@ const AdminProducts: React.FC = () => {
     const [textGenLoading, setTextGenLoading] = useState(false);
     const [customPrompt, setCustomPrompt] = useState('');
     const [previewImage, setPreviewImage] = useState<string | null>(null);
-    const [cooldownTimer, setCooldownTimer] = useState(0);
-    const [isSequencing, setIsSequencing] = useState(false);
     
     const [genSlots, setGenSlots] = useState<GenerationSlot[]>([
         { id: 1, presetKey: 'flat_lay', status: 'idle', imageUrl: null },
@@ -194,14 +153,6 @@ const AdminProducts: React.FC = () => {
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    // Timer effect for sequencing
-    useEffect(() => {
-        if (cooldownTimer > 0) {
-            const timer = setTimeout(() => setCooldownTimer(t => t - 1), 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [cooldownTimer]);
-
     // --- AI HANDLERS ---
 
     const handleTextGen = async () => {
@@ -233,11 +184,9 @@ const AdminProducts: React.FC = () => {
         if (!masterPrintFile) return alert('Загрузите мастер-принт');
         
         const slot = genSlots[slotIndex];
-        
-        // Optimistic update
-        setGenSlots(prev => prev.map((s, idx) => 
-            idx === slotIndex ? { ...s, status: 'loading', errorMsg: undefined } : s
-        ));
+        const newSlots = [...genSlots];
+        newSlots[slotIndex].status = 'loading';
+        setGenSlots(newSlots);
 
         try {
             // Logic to select prompt: Custom vs Preset
@@ -256,32 +205,21 @@ const AdminProducts: React.FC = () => {
             ));
         } catch (e: any) {
             console.error(e);
+            alert(e.message);
             setGenSlots(prev => prev.map((s, idx) => 
-                idx === slotIndex ? { ...s, status: 'error', errorMsg: e.message } : s
+                idx === slotIndex ? { ...s, status: 'error' } : s
             ));
-            // Don't alert if sequencing, just log
-            if (!isSequencing) alert(e.message);
         }
     };
 
-    const handleRenderSequentially = async () => {
+    const handleRenderAll = () => {
         if (!masterPrintFile) return alert('Загрузите мастер-принт');
-        
-        setIsSequencing(true);
         // Only render the first 4 slots (presets). Custom slot (index 4) is manual.
-        for (let i = 0; i < 4; i++) {
-            // Skip custom slot or if user cancelled (logic for cancel not impl here for simplicity)
-            
-            // Generate
-            await generateSlot(i);
-            
-            // Wait 15 seconds if not the last one
-            if (i < 3) {
-                setCooldownTimer(15);
-                await new Promise(resolve => setTimeout(resolve, 15000));
+        genSlots.forEach((slot, idx) => {
+            if (slot.presetKey !== 'custom') {
+                generateSlot(idx);
             }
-        }
-        setIsSequencing(false);
+        });
     };
 
     const handleDownload = async (imageUrl: string) => {
@@ -356,7 +294,7 @@ const AdminProducts: React.FC = () => {
         setMasterPrintFile(null);
         setMasterPreview(null);
         setCustomPrompt('');
-        setGenSlots(prev => prev.map(s => ({ ...s, status: 'idle', imageUrl: null, errorMsg: undefined })));
+        setGenSlots(prev => prev.map(s => ({ ...s, status: 'idle', imageUrl: null })));
     };
 
     const handleCreate = () => {
@@ -367,7 +305,7 @@ const AdminProducts: React.FC = () => {
         setMasterPrintFile(null);
         setMasterPreview(null);
         setCustomPrompt('');
-        setGenSlots(prev => prev.map(s => ({ ...s, status: 'idle', imageUrl: null, errorMsg: undefined })));
+        setGenSlots(prev => prev.map(s => ({ ...s, status: 'idle', imageUrl: null })));
     };
 
     const handleDelete = async (id: string) => {
@@ -482,10 +420,10 @@ const AdminProducts: React.FC = () => {
             {/* --- FULL SCREEN IMAGE PREVIEW MODAL --- */}
             {previewImage && (
                 <div 
-                    className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4 cursor-pointer"
+                    className="fixed inset-0 z-[200] bg-black/95 flex items-center justify-center p-4 cursor-pointer"
                     onClick={() => setPreviewImage(null)}
                 >
-                    <button className="absolute top-4 right-4 text-white hover:text-red-500 transition-colors z-[10000]">
+                    <button className="absolute top-4 right-4 text-white hover:text-red-500 transition-colors">
                         <X size={32} />
                     </button>
                     <img 
@@ -599,7 +537,7 @@ const AdminProducts: React.FC = () => {
                             <h2 className="font-jura text-2xl font-bold uppercase">
                                 {editingId ? 'РЕДАКТИРОВАНИЕ ТОВАРА' : 'НОВЫЙ ТОВАР'}
                             </h2>
-                            {!editingId && <span className="text-xs font-mono bg-blue-600 text-white px-2 py-1 rounded">ЧЕРНОВИК</span>}
+                            {!editingId && <span className="text-xs font-mono bg-blue-600 text-white px-2 py-1 rounded">DRAFT</span>}
                         </div>
                         <button onClick={() => setIsEditorOpen(false)} className="hover:rotate-90 transition-transform"><X size={24}/></button>
                     </div>
@@ -613,7 +551,7 @@ const AdminProducts: React.FC = () => {
                                 <div className="flex justify-between mb-1">
                                     <label className="text-[10px] font-mono uppercase text-zinc-500">Название товара</label>
                                     <button onClick={handleTextGen} disabled={textGenLoading} className="text-[10px] text-blue-600 font-bold uppercase flex items-center gap-1 hover:underline">
-                                        {textGenLoading ? <Loader2 className="animate-spin" size={10}/> : <Sparkles size={10}/>} AI ГЕНЕРАЦИЯ
+                                        {textGenLoading ? <Loader2 className="animate-spin" size={10}/> : <Sparkles size={10}/>} AI GENERATE
                                     </button>
                                 </div>
                                 <input 
@@ -661,30 +599,22 @@ const AdminProducts: React.FC = () => {
                             <div className="flex justify-between items-center mb-6 relative z-10">
                                 <h3 className="font-jura font-bold text-lg uppercase flex items-center gap-2">
                                     <Cpu size={20} className="text-blue-600"/> 
-                                    AI ФОТО-ЛАБ 
-                                    <span className="text-xs font-mono bg-black text-white px-2 py-0.5 rounded">ПАКЕТНАЯ ГЕНЕРАЦИЯ</span>
+                                    AI IMAGE LAB 
+                                    <span className="text-xs font-mono bg-black text-white px-2 py-0.5 rounded">BATCH RENDER</span>
                                 </h3>
-                                <div className="flex items-center gap-4">
-                                    {cooldownTimer > 0 && (
-                                        <span className="text-xs font-mono text-orange-600 flex items-center gap-1 animate-pulse">
-                                            <Clock size={12}/> {cooldownTimer}s cooldown
-                                        </span>
-                                    )}
-                                    <button 
-                                        onClick={handleRenderSequentially}
-                                        disabled={!masterPrintFile || isSequencing}
-                                        className="bg-blue-600 text-white px-6 py-2 font-jura font-bold uppercase hover:bg-blue-700 transition-colors shadow-lg disabled:opacity-50 disabled:shadow-none flex items-center gap-2"
-                                    >
-                                        {isSequencing ? <Loader2 className="animate-spin" size={16}/> : <Sparkles size={16}/>} 
-                                        {isSequencing ? 'ГЕНЕРАЦИЯ...' : 'ЗАПУСК (ПО ОЧЕРЕДИ)'}
-                                    </button>
-                                </div>
+                                <button 
+                                    onClick={handleRenderAll}
+                                    disabled={!masterPrintFile}
+                                    className="bg-blue-600 text-white px-6 py-2 font-jura font-bold uppercase hover:bg-blue-700 transition-colors shadow-lg disabled:opacity-50 disabled:shadow-none flex items-center gap-2"
+                                >
+                                    <Sparkles size={16}/> RENDER ALL
+                                </button>
                             </div>
 
                             <div className="flex gap-6 relative z-10">
                                 {/* MASTER SOURCE */}
                                 <div className="w-1/4 shrink-0">
-                                    <p className="text-[10px] font-mono font-bold uppercase mb-2 text-zinc-500">1. ИСХОДНИК (ПРИНТ)</p>
+                                    <p className="text-[10px] font-mono font-bold uppercase mb-2 text-zinc-500">1. MASTER SOURCE (PRINT)</p>
                                     <div 
                                         onClick={() => masterFileRef.current?.click()}
                                         className="aspect-[3/4] border-2 border-dashed border-zinc-400 bg-white flex flex-col items-center justify-center cursor-pointer hover:border-black transition-colors relative overflow-hidden"
@@ -694,7 +624,7 @@ const AdminProducts: React.FC = () => {
                                         ) : (
                                             <div className="text-center text-zinc-400 p-4">
                                                 <UploadCloud className="mx-auto mb-2"/>
-                                                <span className="text-[9px] uppercase block">ЗАГРУЗИТЬ PNG/JPG</span>
+                                                <span className="text-[9px] uppercase block">UPLOAD PNG/JPG</span>
                                             </div>
                                         )}
                                         <input ref={masterFileRef} type="file" accept="image/*" className="hidden" onChange={handleMasterUpload} />
@@ -704,7 +634,7 @@ const AdminProducts: React.FC = () => {
 
                                 {/* BATCH GRID */}
                                 <div className="flex-1">
-                                    <p className="text-[10px] font-mono font-bold uppercase mb-2 text-zinc-500">2. ВАРИАНТЫ (4X)</p>
+                                    <p className="text-[10px] font-mono font-bold uppercase mb-2 text-zinc-500">2. BATCH GRID (4x VARIATIONS)</p>
                                     <div className="grid grid-cols-4 gap-3">
                                         {genSlots.slice(0, 4).map((slot, idx) => (
                                             <div key={slot.id} className="relative group">
@@ -725,61 +655,39 @@ const AdminProducts: React.FC = () => {
 
                                                 {/* PREVIEW AREA */}
                                                 <div 
-                                                    className="aspect-[3/4] bg-white border border-zinc-300 relative overflow-hidden flex items-center justify-center group"
+                                                    className="aspect-[3/4] bg-white border border-zinc-300 relative overflow-hidden flex items-center justify-center cursor-pointer"
+                                                    onClick={() => slot.imageUrl && setPreviewImage(slot.imageUrl)}
                                                 >
                                                     {slot.status === 'loading' ? (
                                                         <div className="absolute inset-0 bg-zinc-100 animate-pulse flex items-center justify-center">
                                                             <Loader2 className="animate-spin text-zinc-400"/>
                                                         </div>
                                                     ) : slot.status === 'success' && slot.imageUrl ? (
-                                                        <>
-                                                            <img 
-                                                                src={slot.imageUrl} 
-                                                                className="w-full h-full object-cover" 
-                                                            />
-                                                            <div className="absolute top-1 right-1 bg-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                                                <Maximize2 size={10} className="text-black"/>
-                                                            </div>
-                                                        </>
+                                                        <img src={slot.imageUrl} className="w-full h-full object-cover" />
                                                     ) : slot.status === 'error' ? (
-                                                        <div className="text-red-500 text-[9px] font-mono text-center p-2 flex flex-col items-center">
-                                                            <AlertCircle size={16} className="mb-1"/>
-                                                            <span className="leading-tight">{slot.errorMsg || 'ERROR'}</span>
-                                                            <button onClick={() => generateSlot(idx)} className="mt-2 bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200">RETRY</button>
-                                                        </div>
+                                                        <div className="text-red-500 text-[9px] font-mono text-center p-2">ERROR</div>
                                                     ) : (
-                                                        <div className="flex flex-col items-center">
-                                                            <LayoutGrid size={24} className="text-zinc-200 mb-2"/>
-                                                            <button 
-                                                                onClick={() => generateSlot(idx)} 
-                                                                className="bg-black text-white px-3 py-1 text-[9px] font-bold uppercase hover:bg-blue-600 transition-colors flex items-center gap-1"
-                                                            >
-                                                                <Play size={8} fill="currentColor"/> GEN
-                                                            </button>
-                                                        </div>
+                                                        <div className="text-zinc-200"><LayoutGrid size={24}/></div>
                                                     )}
 
-                                                    {/* HOVER ACTIONS (Only on Success) */}
+                                                    {/* HOVER ACTIONS */}
                                                     {slot.status === 'success' && slot.imageUrl && (
-                                                        <div 
-                                                            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2 cursor-zoom-in"
-                                                            onClick={() => setPreviewImage(slot.imageUrl)}
-                                                        >
+                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2" onClick={e => e.stopPropagation()}>
                                                             <button 
-                                                                onClick={(e) => { e.stopPropagation(); applyGeneratedImage(idx); }}
+                                                                onClick={() => applyGeneratedImage(idx)}
                                                                 className="w-full bg-green-600 text-white py-1 text-[9px] font-bold uppercase flex items-center justify-center gap-1 hover:bg-green-700"
                                                             >
                                                                 <Check size={10}/> Принять
                                                             </button>
                                                             <div className="flex gap-1 w-full">
                                                                 <button 
-                                                                    onClick={(e) => { e.stopPropagation(); generateSlot(idx); }}
+                                                                    onClick={() => generateSlot(idx)}
                                                                     className="flex-1 bg-white text-black py-1 text-[9px] font-bold uppercase flex items-center justify-center gap-1 hover:bg-zinc-200"
                                                                 >
                                                                     <RefreshCw size={10}/>
                                                                 </button>
                                                                 <button 
-                                                                    onClick={(e) => { e.stopPropagation(); handleDownload(slot.imageUrl!); }}
+                                                                    onClick={() => handleDownload(slot.imageUrl!)}
                                                                     className="flex-1 bg-blue-600 text-white py-1 text-[9px] font-bold uppercase flex items-center justify-center gap-1 hover:bg-blue-700"
                                                                 >
                                                                     <Download size={10}/>
@@ -799,7 +707,7 @@ const AdminProducts: React.FC = () => {
                                 <div className="flex-1 flex flex-col justify-between">
                                     <div className="flex items-center gap-2 text-green-500 font-mono text-xs uppercase mb-2">
                                         <Terminal size={14}/>
-                                        <span className="animate-pulse">ДОСТУП_К_ТЕРМИНАЛУ</span>
+                                        <span className="animate-pulse">CUSTOM_TERMINAL_ACCESS</span>
                                     </div>
                                     <div className="flex-1 bg-zinc-900 border border-zinc-700 p-2 font-mono text-sm text-green-400 focus-within:border-green-600 flex gap-2">
                                         <span className="select-none text-green-700">{'>_'}</span>
@@ -823,39 +731,25 @@ const AdminProducts: React.FC = () => {
                                 <div className="w-1/4 shrink-0">
                                     <div className="relative group h-full">
                                         <div 
-                                            className="aspect-[3/4] bg-zinc-900 border border-zinc-700 relative overflow-hidden flex items-center justify-center h-full group"
+                                            className="aspect-[3/4] bg-zinc-900 border border-zinc-700 relative overflow-hidden flex items-center justify-center h-full cursor-pointer"
+                                            onClick={() => genSlots[4].imageUrl && setPreviewImage(genSlots[4].imageUrl)}
                                         >
                                             {genSlots[4].status === 'loading' ? (
                                                 <div className="text-green-500 font-mono text-xs animate-pulse text-center">PROCESSING...<br/>PLEASE WAIT</div>
                                             ) : genSlots[4].status === 'success' && genSlots[4].imageUrl ? (
-                                                <>
-                                                    <img 
-                                                        src={genSlots[4].imageUrl!} 
-                                                        className="w-full h-full object-cover" 
-                                                    />
-                                                    <div className="absolute top-1 right-1 bg-black/50 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                                        <Maximize2 size={12} className="text-green-500"/>
-                                                    </div>
-                                                </>
+                                                <img src={genSlots[4].imageUrl!} className="w-full h-full object-cover" />
                                             ) : genSlots[4].status === 'error' ? (
-                                                <div className="text-red-500 text-[9px] font-mono text-center p-2 flex flex-col items-center">
-                                                    <AlertCircle size={16} className="mb-1"/>
-                                                    <span>SYSTEM ERROR</span>
-                                                    <button onClick={() => generateSlot(4)} className="mt-2 bg-red-900 text-red-100 px-2 py-1 rounded hover:bg-red-800 uppercase text-[9px]">RETRY</button>
-                                                </div>
+                                                <div className="text-red-500 text-[9px] font-mono text-center p-2">SYSTEM ERROR</div>
                                             ) : (
                                                 <div className="text-zinc-700 font-mono text-[9px] text-center p-4">WAITING FOR<br/>INPUT DATA</div>
                                             )}
 
                                             {genSlots[4].status === 'success' && genSlots[4].imageUrl && (
-                                                <div 
-                                                    className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2 cursor-zoom-in"
-                                                    onClick={() => setPreviewImage(genSlots[4].imageUrl)}
-                                                >
-                                                    <button onClick={(e) => { e.stopPropagation(); applyGeneratedImage(4); }} className="w-full bg-green-600 text-white py-1 text-[9px] font-bold uppercase">APPLY</button>
+                                                <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2" onClick={e => e.stopPropagation()}>
+                                                    <button onClick={() => applyGeneratedImage(4)} className="w-full bg-green-600 text-white py-1 text-[9px] font-bold uppercase">APPLY</button>
                                                     <div className="flex gap-1 w-full">
-                                                        <button onClick={(e) => { e.stopPropagation(); generateSlot(4); }} className="flex-1 bg-white text-black py-1 text-[9px] font-bold uppercase">RETRY</button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDownload(genSlots[4].imageUrl!); }} className="flex-1 bg-blue-600 text-white py-1 text-[9px] font-bold uppercase"><Download size={10}/></button>
+                                                        <button onClick={() => generateSlot(4)} className="flex-1 bg-white text-black py-1 text-[9px] font-bold uppercase">RETRY</button>
+                                                        <button onClick={() => handleDownload(genSlots[4].imageUrl!)} className="flex-1 bg-blue-600 text-white py-1 text-[9px] font-bold uppercase"><Download size={10}/></button>
                                                     </div>
                                                 </div>
                                             )}

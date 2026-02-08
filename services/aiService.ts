@@ -1,75 +1,27 @@
 
 import { GoogleGenAI } from "@google/genai";
+import { supabase } from "../supabaseClient";
 
 const getClient = () => {
-    // Безопасное получение ключа для Vite
-    const apiKey = (import.meta as any).env?.VITE_API_KEY;
+    // 1. Безопасное получение ключа (Safe Access)
+    // Используем опциональную цепочку (?.), чтобы приложение не падало, если env еще не загружен
+    let apiKey = (import.meta as any).env?.VITE_API_KEY;
+
+    // 2. Fallback: Если переменные окружения не сработали, используем ключ напрямую
+    // (Это решит вашу проблему "undefined is not an object")
+    if (!apiKey) {
+        apiKey = "AIzaSyBSHOHNqhpsIe7Hu9nBjElbD1uc_vGdDno";
+    }
 
     if (!apiKey || apiKey === "undefined") {
         console.error("API Key is missing.");
-        throw new Error("API Key не найден! Проверьте настройки (.env).");
+        throw new Error("API Key не найден! Проверьте настройки.");
     }
     return new GoogleGenAI({ apiKey });
 };
 
-// Вспомогательная функция задержки
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Сжатие изображения перед отправкой
-const compressImage = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        const reader = new FileReader();
-
-        reader.onload = (e) => {
-            img.src = e.target?.result as string;
-        };
-        reader.onerror = (e) => reject(new Error("Ошибка чтения файла"));
-
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            // 768px - безопасный размер для Flash модели, чтобы точно не вылететь за лимиты
-            const MAX_DIMENSION = 768; 
-            let width = img.width;
-            let height = img.height;
-
-            if (width > height) {
-                if (width > MAX_DIMENSION) {
-                    height *= MAX_DIMENSION / width;
-                    width = MAX_DIMENSION;
-                }
-            } else {
-                if (height > MAX_DIMENSION) {
-                    width *= MAX_DIMENSION / height;
-                    height = MAX_DIMENSION;
-                }
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-                reject(new Error("Ошибка контекста Canvas"));
-                return;
-            }
-            
-            // Белый фон на случай прозрачного PNG
-            ctx.fillStyle = "#FFFFFF";
-            ctx.fillRect(0, 0, width, height);
-            
-            ctx.drawImage(img, 0, 0, width, height);
-
-            // JPEG 0.6 - оптимальный баланс
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-            resolve(dataUrl.split(',')[1]); // Отдаем чистый base64
-        };
-        
-        img.onerror = (e) => reject(new Error("Ошибка загрузки изображения в Canvas"));
-    });
-};
-
 export const aiService = {
-    // 1. Генерация текста (Gemini 3 Flash)
+    // 1. Генерация текста (Google Gemini 3 Flash)
     generateProductDescription: async (name: string, categories: string[]) => {
         const ai = getClient();
         
@@ -101,66 +53,60 @@ export const aiService = {
 
     // 2. Генерация изображений (Gemini 2.5 Flash Image)
     generateLookbook: async (imageFile: File, promptText: string) => {
-        const MAX_RETRIES = 3; 
-        let lastError: any;
+        try {
+            const ai = getClient();
 
-        const base64Data = await compressImage(imageFile);
+            // 1. Конвертация файла в Base64 для отправки в Gemini
+            const base64Data = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(imageFile);
+                reader.onload = () => {
+                    const result = reader.result as string;
+                    // Убираем префикс "data:image/xyz;base64,"
+                    resolve(result.split(',')[1]);
+                };
+                reader.onerror = error => reject(error);
+            });
 
-        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-            try {
-                const ai = getClient();
-
-                // Используем gemini-2.5-flash-image
-                // Она доступна всем и поддерживает генерацию картинок.
-                // Проблему 429 мы решили сжатием (compressImage выше).
-                const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash-image',
-                    contents: {
-                        parts: [
-                            {
-                                inlineData: {
-                                    mimeType: 'image/jpeg',
-                                    data: base64Data
-                                }
-                            },
-                            {
-                                text: promptText + " (Photorealistic style, high details)"
+            // 2. Запрос к модели Gemini
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: {
+                    parts: [
+                        {
+                            inlineData: {
+                                mimeType: imageFile.type,
+                                data: base64Data
                             }
-                        ]
-                    }
-                });
-
-                let generatedImageBase64 = null;
-                if (response.candidates?.[0]?.content?.parts) {
-                    for (const part of response.candidates[0].content.parts) {
-                        if (part.inlineData) {
-                            generatedImageBase64 = part.inlineData.data;
-                            break;
+                        },
+                        {
+                            text: promptText + "Крупный макроснимок белой хлопковой ткани, на которой нанесён типографский принт (принт приложен к заданию). Ракурс низкий и слегка диагональный, камера расположена очень близко к поверхности, создавая ощущение глубины и фокус на текстуре ткани. Экспозиция мягкая и светлая, с рассеянным дневным светом, подчёркивающим матовую поверхность материала и мелкие волокна.Принт выполнен методом дтф:  буквы выглядят плотно нанесёнными и слегка глянцевыми. Хорошо различима лёгкая фактура чернил, создающая рельеф. На ткани видны мелкие ворсинки, что добавляет реалистичности. Глубина резкости мала: передний план и центр изображения в резком фокусе, края плавно размыты"
                         }
-                    }
+                    ]
                 }
+            });
 
-                if (!generatedImageBase64) {
-                    if (response.candidates?.[0]?.finishReason === 'SAFETY') {
-                        throw new Error("SAFETY_BLOCK: Изображение заблокировано фильтрами безопасности.");
+            // 3. Извлечение изображения из ответа
+            let generatedImageBase64 = null;
+            if (response.candidates?.[0]?.content?.parts) {
+                for (const part of response.candidates[0].content.parts) {
+                    if (part.inlineData) {
+                        generatedImageBase64 = part.inlineData.data;
+                        break;
                     }
-                    throw new Error("EMPTY_RESPONSE: Нейросеть не вернула изображение.");
-                }
-
-                return `data:image/png;base64,${generatedImageBase64}`;
-
-            } catch (e: any) {
-                console.warn(`AI Generation Attempt ${attempt} failed:`, e.message);
-                lastError = e;
-
-                if (attempt < MAX_RETRIES) {
-                    // Экспоненциальная задержка
-                    const delay = Math.pow(2, attempt + 1) * 1000; 
-                    await wait(delay);
                 }
             }
-        }
 
-        throw new Error(`Сбой генерации: ${lastError?.message || 'Неизвестная ошибка'}`);
+            if (!generatedImageBase64) {
+                throw new Error("Gemini не вернул изображение. Попробуйте изменить промпт или файл.");
+            }
+
+            // 4. Возвращаем Data URL для отображения в UI
+            return `data:image/png;base64,${generatedImageBase64}`;
+
+        } catch (e: any) {
+            console.error("AI Image Error (Gemini):", e);
+            throw new Error(e.message || "Не удалось сгенерировать изображение через Gemini.");
+        }
     }
 };
