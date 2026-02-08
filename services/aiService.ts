@@ -20,6 +20,9 @@ const getClient = () => {
     return new GoogleGenAI({ apiKey });
 };
 
+// Вспомогательная функция задержки
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const aiService = {
     // 1. Генерация текста (Google Gemini 3 Flash)
     generateProductDescription: async (name: string, categories: string[]) => {
@@ -51,62 +54,77 @@ export const aiService = {
         }
     },
 
-    // 2. Генерация изображений (Gemini 2.5 Flash Image)
+    // 2. Генерация изображений (Gemini 2.5 Flash Image) с повторными попытками
     generateLookbook: async (imageFile: File, promptText: string) => {
-        try {
-            const ai = getClient();
+        const MAX_RETRIES = 5;
+        const RETRY_DELAY = 1000; // 1 секунда между попытками
 
-            // 1. Конвертация файла в Base64 для отправки в Gemini
-            const base64Data = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(imageFile);
-                reader.onload = () => {
-                    const result = reader.result as string;
-                    // Убираем префикс "data:image/xyz;base64,"
-                    resolve(result.split(',')[1]);
-                };
-                reader.onerror = error => reject(error);
-            });
+        let lastError: any;
 
-            // 2. Запрос к модели Gemini
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: {
-                    parts: [
-                        {
-                            inlineData: {
-                                mimeType: imageFile.type,
-                                data: base64Data
+        // Конвертация файла в Base64 (делаем один раз до цикла)
+        const base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(imageFile);
+            reader.onload = () => {
+                const result = reader.result as string;
+                resolve(result.split(',')[1]);
+            };
+            reader.onerror = error => reject(error);
+        });
+
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                const ai = getClient();
+
+                // Запрос к модели Gemini
+                const response = await ai.models.generateContent({
+                    model: 'gemini-2.5-flash-image',
+                    contents: {
+                        parts: [
+                            {
+                                inlineData: {
+                                    mimeType: imageFile.type,
+                                    data: base64Data
+                                }
+                            },
+                            {
+                                text: promptText + " Крупный макроснимок белой хлопковой ткани, на которой нанесён типографский принт (принт приложен к заданию). Ракурс низкий и слегка диагональный, камера расположена очень близко к поверхности, создавая ощущение глубины и фокус на текстуре ткани. Экспозиция мягкая и светлая, с рассеянным дневным светом, подчёркивающим матовую поверхность материала и мелкие волокна.Принт выполнен методом дтф:  буквы выглядят плотно нанесёнными и слегка глянцевыми. Хорошо различима лёгкая фактура чернил, создающая рельеф. На ткани видны мелкие ворсинки, что добавляет реалистичности. Глубина резкости мала: передний план и центр изображения в резком фокусе, края плавно размыты"
                             }
-                        },
-                        {
-                            text: promptText + "Крупный макроснимок белой хлопковой ткани, на которой нанесён типографский принт (принт приложен к заданию). Ракурс низкий и слегка диагональный, камера расположена очень близко к поверхности, создавая ощущение глубины и фокус на текстуре ткани. Экспозиция мягкая и светлая, с рассеянным дневным светом, подчёркивающим матовую поверхность материала и мелкие волокна.Принт выполнен методом дтф:  буквы выглядят плотно нанесёнными и слегка глянцевыми. Хорошо различима лёгкая фактура чернил, создающая рельеф. На ткани видны мелкие ворсинки, что добавляет реалистичности. Глубина резкости мала: передний план и центр изображения в резком фокусе, края плавно размыты"
-                        }
-                    ]
-                }
-            });
+                        ]
+                    }
+                });
 
-            // 3. Извлечение изображения из ответа
-            let generatedImageBase64 = null;
-            if (response.candidates?.[0]?.content?.parts) {
-                for (const part of response.candidates[0].content.parts) {
-                    if (part.inlineData) {
-                        generatedImageBase64 = part.inlineData.data;
-                        break;
+                // Извлечение изображения из ответа
+                let generatedImageBase64 = null;
+                if (response.candidates?.[0]?.content?.parts) {
+                    for (const part of response.candidates[0].content.parts) {
+                        if (part.inlineData) {
+                            generatedImageBase64 = part.inlineData.data;
+                            break;
+                        }
                     }
                 }
+
+                if (!generatedImageBase64) {
+                    throw new Error("Gemini не вернул изображение (пустой ответ).");
+                }
+
+                // Если успешно - возвращаем результат
+                return `data:image/png;base64,${generatedImageBase64}`;
+
+            } catch (e: any) {
+                console.warn(`AI Generation Attempt ${attempt}/${MAX_RETRIES} failed:`, e.message);
+                lastError = e;
+
+                // Если это была не последняя попытка, ждем перед следующей
+                if (attempt < MAX_RETRIES) {
+                    await wait(RETRY_DELAY);
+                }
             }
-
-            if (!generatedImageBase64) {
-                throw new Error("Gemini не вернул изображение. Попробуйте изменить промпт или файл.");
-            }
-
-            // 4. Возвращаем Data URL для отображения в UI
-            return `data:image/png;base64,${generatedImageBase64}`;
-
-        } catch (e: any) {
-            console.error("AI Image Error (Gemini):", e);
-            throw new Error(e.message || "Не удалось сгенерировать изображение через Gemini.");
         }
+
+        // Если цикл завершился и успеха нет, выбрасываем последнюю ошибку
+        console.error("AI Image Error (Final):", lastError);
+        throw new Error(lastError?.message || "Не удалось сгенерировать изображение после 5 попыток.");
     }
 };
