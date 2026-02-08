@@ -15,20 +15,54 @@ const getClient = () => {
 // Вспомогательная функция задержки
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Конвертация файла в чистую Base64 строку (без префикса data:...)
-async function fileToBase64(file: File): Promise<string> {
+// Сжатие изображения перед отправкой (Critical Fix for 429 Errors)
+const compressImage = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
+        const img = new Image();
         const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => {
-            const result = reader.result as string;
-            // Отделяем метаданные, берем только контент после запятой
-            const base64 = result.split(',')[1]; 
-            resolve(base64);
+
+        reader.onload = (e) => {
+            img.src = e.target?.result as string;
         };
-        reader.onerror = error => reject(error);
+        reader.onerror = (e) => reject(new Error("Ошибка чтения файла"));
+
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            // Ограничиваем размер до 1024px по большей стороне
+            // Это значительно снижает потребление токенов (TPM)
+            const MAX_DIMENSION = 1024; 
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > MAX_DIMENSION) {
+                    height *= MAX_DIMENSION / width;
+                    width = MAX_DIMENSION;
+                }
+            } else {
+                if (height > MAX_DIMENSION) {
+                    width *= MAX_DIMENSION / height;
+                    height = MAX_DIMENSION;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                reject(new Error("Ошибка контекста Canvas"));
+                return;
+            }
+            
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Конвертируем в JPEG с качеством 0.7 (достаточно для AI)
+            // Это уменьшает размер payload с ~5MB до ~200KB
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            resolve(dataUrl.split(',')[1]); // Отдаем чистый base64
+        };
     });
-}
+};
 
 export const aiService = {
     // 1. Генерация текста (Gemini 3 Flash)
@@ -67,7 +101,8 @@ export const aiService = {
         const MAX_RETRIES = 3; 
         let lastError: any;
 
-        const base64Data = await fileToBase64(imageFile);
+        // СЖИМАЕМ КАРТИНКУ ПЕРЕД ОТПРАВКОЙ
+        const base64Data = await compressImage(imageFile);
 
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
@@ -81,7 +116,7 @@ export const aiService = {
                         parts: [
                             {
                                 inlineData: {
-                                    mimeType: imageFile.type,
+                                    mimeType: 'image/jpeg', // Мы всегда конвертируем в JPEG в compressImage
                                     data: base64Data
                                 }
                             },
