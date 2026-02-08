@@ -15,7 +15,7 @@ const getClient = () => {
 // Вспомогательная функция задержки
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Сжатие изображения перед отправкой (Critical Fix for 429 Errors)
+// Сжатие изображения перед отправкой
 const compressImage = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -28,9 +28,8 @@ const compressImage = async (file: File): Promise<string> => {
 
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            // Ограничиваем размер до 1024px по большей стороне
-            // Это значительно снижает потребление токенов (TPM)
-            const MAX_DIMENSION = 1024; 
+            // Ограничиваем размер до 800px для максимальной скорости и стабильности
+            const MAX_DIMENSION = 800; 
             let width = img.width;
             let height = img.height;
 
@@ -54,14 +53,14 @@ const compressImage = async (file: File): Promise<string> => {
                 return;
             }
             
-            // Белый фон на случай прозрачного PNG (JPEG не поддерживает прозрачность)
+            // Белый фон на случай прозрачного PNG
             ctx.fillStyle = "#FFFFFF";
             ctx.fillRect(0, 0, width, height);
             
             ctx.drawImage(img, 0, 0, width, height);
 
-            // Конвертируем в JPEG с качеством 0.7 (достаточно для AI, но весит в 10 раз меньше)
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            // JPEG 0.6 - оптимальный баланс для нейросети (ей не нужно супер качество исходника)
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
             resolve(dataUrl.split(',')[1]); // Отдаем чистый base64
         };
         
@@ -70,7 +69,7 @@ const compressImage = async (file: File): Promise<string> => {
 };
 
 export const aiService = {
-    // 1. Генерация текста (Gemini 3 Flash - оптимально по скорости и качеству)
+    // 1. Генерация текста (Gemini 3 Flash)
     generateProductDescription: async (name: string, categories: string[]) => {
         const ai = getClient();
         
@@ -100,40 +99,36 @@ export const aiService = {
         }
     },
 
-    // 2. Генерация изображений (Gemini 2.5 Flash Image) с умным повтором (Smart Retry)
+    // 2. Генерация изображений (Gemini 3 Pro Image - Более мощная модель)
     generateLookbook: async (imageFile: File, promptText: string) => {
-        // Уменьшаем кол-во попыток до 3, так как ожидание при ошибке 429 очень долгое (30+ сек)
         const MAX_RETRIES = 3; 
         let lastError: any;
 
-        // СЖИМАЕМ КАРТИНКУ ПЕРЕД ОТПРАВКОЙ
-        // Это самое важное исправление для ошибки 429
         const base64Data = await compressImage(imageFile);
 
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 const ai = getClient();
 
-                // Запрос к модели
-                // Используем gemini-2.5-flash-image как наиболее стабильную модель для визуальных задач
+                // Используем gemini-3-pro-image-preview для лучшего качества и стабильности
+                // Она может иметь другие квоты, отличные от Flash
                 const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash-image',
+                    model: 'gemini-3-pro-image-preview',
                     contents: {
                         parts: [
                             {
                                 inlineData: {
-                                    mimeType: 'image/jpeg', // Мы всегда конвертируем в JPEG в compressImage
+                                    mimeType: 'image/jpeg',
                                     data: base64Data
                                 }
                             },
                             {
-                                text: promptText + " (High quality photorealistic fashion photography, detailed fabric texture, professional lighting)"
+                                text: promptText + " (High quality photorealistic fashion photography, 8k resolution, detailed texture)"
                             }
                         ]
                     }
                 });
 
-                // Ищем изображение в ответе
                 let generatedImageBase64 = null;
                 if (response.candidates?.[0]?.content?.parts) {
                     for (const part of response.candidates[0].content.parts) {
@@ -145,37 +140,28 @@ export const aiService = {
                 }
 
                 if (!generatedImageBase64) {
-                    // Проверка на Safety Filters
                     if (response.candidates?.[0]?.finishReason === 'SAFETY') {
-                        throw new Error("Генерация заблокирована фильтром безопасности (Safety Filter). Попробуйте другое фото.");
+                        throw new Error("SAFETY_BLOCK: Изображение заблокировано фильтрами безопасности.");
                     }
-                    throw new Error("Gemini не вернул изображение (пустой ответ). Возможно, модель перегружена.");
+                    throw new Error("EMPTY_RESPONSE: Нейросеть не вернула изображение.");
                 }
 
-                // Успех
                 return `data:image/png;base64,${generatedImageBase64}`;
 
             } catch (e: any) {
-                console.warn(`AI Generation Attempt ${attempt}/${MAX_RETRIES} failed:`, e.message);
+                console.warn(`AI Generation Attempt ${attempt} failed:`, e.message);
                 lastError = e;
 
-                // ЛОГИКА ОБРАБОТКИ ОШИБОК
-                const errorMsg = e.message?.toLowerCase() || '';
-                const isRateLimit = errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('exhausted');
-
-                if (isRateLimit && attempt < MAX_RETRIES) {
-                    // Если лимиты исчерпаны, API обычно просит подождать ~30-35 секунд.
-                    // Ждем 35 секунд, чтобы наверняка.
-                    console.log("⏳ Quota Exceeded (429). Waiting 35 seconds before retry...");
-                    await wait(35000); 
-                } else if (attempt < MAX_RETRIES) {
-                    // Обычная ошибка (сеть, 500 и т.д.) - ждем 2 секунды
-                    await wait(2000);
+                if (attempt < MAX_RETRIES) {
+                    // Экспоненциальная задержка: 4 сек -> 8 сек -> 16 сек
+                    // Это быстрее чем фиксированные 35 сек, но дает API "остыть"
+                    const delay = Math.pow(2, attempt + 1) * 1000;
+                    console.log(`Waiting ${delay}ms before retry...`);
+                    await wait(delay);
                 }
             }
         }
 
-        // Если все попытки провалились
-        throw new Error(`Не удалось сгенерировать изображение: ${lastError?.message || 'Неизвестная ошибка'}`);
+        throw new Error(`Сбой генерации (Попыток: ${MAX_RETRIES}): ${lastError?.message || 'Неизвестная ошибка'}`);
     }
 };
