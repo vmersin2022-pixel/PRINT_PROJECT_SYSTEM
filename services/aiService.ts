@@ -28,8 +28,8 @@ const compressImage = async (file: File): Promise<string> => {
 
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            // Ограничиваем размер до 800px для максимальной скорости и стабильности
-            const MAX_DIMENSION = 800; 
+            // 768px - безопасный размер для Flash модели, чтобы точно не вылететь за лимиты
+            const MAX_DIMENSION = 768; 
             let width = img.width;
             let height = img.height;
 
@@ -59,7 +59,7 @@ const compressImage = async (file: File): Promise<string> => {
             
             ctx.drawImage(img, 0, 0, width, height);
 
-            // JPEG 0.6 - оптимальный баланс для нейросети (ей не нужно супер качество исходника)
+            // JPEG 0.6 - оптимальный баланс
             const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
             resolve(dataUrl.split(',')[1]); // Отдаем чистый base64
         };
@@ -99,7 +99,7 @@ export const aiService = {
         }
     },
 
-    // 2. Генерация изображений (Gemini 3 Pro Image - Более мощная модель)
+    // 2. Генерация изображений (Gemini 2.5 Flash Image)
     generateLookbook: async (imageFile: File, promptText: string) => {
         const MAX_RETRIES = 3; 
         let lastError: any;
@@ -110,10 +110,11 @@ export const aiService = {
             try {
                 const ai = getClient();
 
-                // Используем gemini-3-pro-image-preview для лучшего качества и стабильности
-                // Она может иметь другие квоты, отличные от Flash
+                // Используем gemini-2.5-flash-image
+                // Она доступна всем и поддерживает генерацию картинок.
+                // Проблему 429 мы решили сжатием (compressImage выше).
                 const response = await ai.models.generateContent({
-                    model: 'gemini-3-pro-image-preview',
+                    model: 'gemini-2.5-flash-image',
                     contents: {
                         parts: [
                             {
@@ -123,7 +124,7 @@ export const aiService = {
                                 }
                             },
                             {
-                                text: promptText + " (High quality photorealistic fashion photography, 8k resolution, detailed texture)"
+                                text: promptText + " (Photorealistic style, high details)"
                             }
                         ]
                     }
@@ -153,15 +154,13 @@ export const aiService = {
                 lastError = e;
 
                 if (attempt < MAX_RETRIES) {
-                    // Экспоненциальная задержка: 4 сек -> 8 сек -> 16 сек
-                    // Это быстрее чем фиксированные 35 сек, но дает API "остыть"
-                    const delay = Math.pow(2, attempt + 1) * 1000;
-                    console.log(`Waiting ${delay}ms before retry...`);
+                    // Экспоненциальная задержка
+                    const delay = Math.pow(2, attempt + 1) * 1000; 
                     await wait(delay);
                 }
             }
         }
 
-        throw new Error(`Сбой генерации (Попыток: ${MAX_RETRIES}): ${lastError?.message || 'Неизвестная ошибка'}`);
+        throw new Error(`Сбой генерации: ${lastError?.message || 'Неизвестная ошибка'}`);
     }
 };
