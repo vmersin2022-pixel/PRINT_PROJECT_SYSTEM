@@ -9,75 +9,82 @@ const PORT = process.env.PORT || 80;
 
 // Enable CORS for your main website
 app.use(cors({
-    origin: '*', // В продакшене лучше заменить на адрес твоего сайта
+    origin: '*', 
     methods: ['POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'] // Added Authorization to allowed headers
+    allowedHeaders: ['Content-Type', 'Authorization'] 
 }));
 
 app.use(express.json());
 
 app.get('/', (req, res) => {
-    res.send('Print Project AI Proxy is Running. Status: Online.');
+    res.send('Print Project AI Proxy is Running (Fixed v2.2). Status: Online.');
 });
 
 app.post('/generate', async (req, res) => {
-    console.log(`[${new Date().toLocaleTimeString()}] New Generation Request`);
+    const time = new Date().toLocaleTimeString();
+    console.log(`[${time}] New Generation Request`);
 
     try {
-        const { prompt, imageUrl, model, width, height } = req.body;
+        // 1. Safe Body Extraction
+        const body = req.body || {};
+        const { prompt, imageUrl, model, width, height } = body;
 
+        // 2. Validation
         if (!prompt) {
+            console.error(`[${time}] Error: Prompt missing`);
             return res.status(400).json({ error: 'Prompt is required' });
         }
 
-        // 1. Construct the URL
-        // REMOVED: The automatic suffix ". Professional fashion photography..."
-        // Now we send exactly what the user typed/selected.
-        const encodedPrompt = encodeURIComponent(prompt);
+        // 3. Encoding (Explicit declaration to prevent ReferenceError)
+        const promptStr = String(prompt);
+        const encodedPrompt = encodeURIComponent(promptStr);
         
-        // 2. Build the Pollinations URL
-        // Adding random seed to ensure variety
+        // 4. Model Selection
+        const selectedModel = model || 'flux';
         const seed = Math.floor(Math.random() * 1000000);
-        let url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=${model || 'flux'}&width=${width || 1024}&height=${height || 1024}&nologo=true&seed=${seed}&enhance=false`;
         
-        if (imageUrl) {
+        // 5. Build URL
+        // Using explicit variable 'encodedPrompt'
+        let url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=${selectedModel}&width=${width || 1024}&height=${height || 1024}&nologo=true&seed=${seed}&enhance=false`;
+        
+        if (imageUrl && typeof imageUrl === 'string') {
             url += `&image=${encodeURIComponent(imageUrl)}`;
         }
 
-        console.log(`--> Proxying to AI Provider: ${model || 'flux'}`);
-        console.log(`--> Prompt: ${prompt.substring(0, 50)}...`);
+        console.log(`[${time}] Proxying to Model: ${selectedModel}`);
+        // console.log(`[${time}] URL: ${url}`); // Uncomment for debugging (hide if sensitive)
 
-        // 3. Server-to-Server Fetch
-        // This runs on the server, so no CORS issues and stable connection
+        // 6. External Fetch
         const aiResponse = await fetch(url, {
             method: 'GET',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PrintProjectProxy/1.0',
-                // Authorization header is used if provided in env vars
-                'Authorization': `Bearer ${process.env.POLLINATIONS_API_KEY}`
+                'User-Agent': 'PrintProjectProxy/2.2',
+                // Only send Auth header if Key is present
+                ...(process.env.POLLINATIONS_API_KEY ? { 'Authorization': `Bearer ${process.env.POLLINATIONS_API_KEY}` } : {})
             },
-            timeout: 120000 // 2 minutes timeout (Amvera allows long connections)
+            timeout: 120000 // 2 minutes
         });
 
         if (!aiResponse.ok) {
             const errText = await aiResponse.text();
-            console.error('AI Provider Error:', errText);
-            throw new Error(`Provider responded with ${aiResponse.status}: ${errText}`);
+            console.error(`[${time}] AI Provider Error (${aiResponse.status}):`, errText);
+            throw new Error(`AI Provider responded with ${aiResponse.status}: ${errText}`);
         }
 
-        // 4. Stream the image back to the frontend
+        // 7. Success Response
         const arrayBuffer = await aiResponse.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
         res.set('Content-Type', 'image/jpeg');
         res.send(buffer);
-        console.log(`[${new Date().toLocaleTimeString()}] Success: Image sent to client`);
+        console.log(`[${time}] Success: Image sent to client`);
 
     } catch (error) {
-        console.error('Critical Proxy Error:', error.message);
+        console.error(`[${time}] Server Error:`, error.message);
+        // Return 500 with details so frontend knows what happened
         res.status(500).json({ 
             error: 'Generation failed on proxy server', 
-            details: error.message 
+            details: error.message || 'Unknown server error'
         });
     }
 });

@@ -34,6 +34,14 @@ const PROMPT_PRESETS: Record<string, { label: string, prompt: string }> = {
     }
 };
 
+const AI_MODELS = [
+    { id: 'flux', label: 'FLUX (Default)' },
+    { id: 'flux-realism', label: 'FLUX Realism' },
+    { id: 'flux-3d', label: 'FLUX 3D' },
+    { id: 'any-dark', label: 'Dark / Gothic' },
+    { id: 'turbo', label: 'Turbo (Fast)' },
+];
+
 interface ProductFormData {
     name: string;
     price: string;
@@ -88,6 +96,7 @@ const AdminProducts: React.FC = () => {
     const [masterPreview, setMasterPreview] = useState<string | null>(null);
     const [masterPrintUrl, setMasterPrintUrl] = useState<string | null>(null); // PUBLIC URL FOR AI
     const [isUploadingMaster, setIsUploadingMaster] = useState(false);
+    const [selectedModel, setSelectedModel] = useState<string>('flux'); // NEW: Model Selection
 
     const [textGenLoading, setTextGenLoading] = useState(false);
     const [customPrompt, setCustomPrompt] = useState('');
@@ -217,8 +226,8 @@ const AdminProducts: React.FC = () => {
                 prompt = PROMPT_PRESETS[slot.presetKey].prompt;
             }
 
-            // Pass the Public URL to the AI Service
-            const imageUrl = await aiService.generateLookbook(masterPrintUrl, prompt);
+            // Pass the Public URL and Selected Model to the AI Service
+            const imageUrl = await aiService.generateLookbook(masterPrintUrl, prompt, selectedModel);
             
             setGenSlots(prev => prev.map((s, idx) => 
                 idx === slotIndex ? { ...s, status: 'success', imageUrl } : s
@@ -514,10 +523,23 @@ const AdminProducts: React.FC = () => {
 
                         {/* AI LAB (FLUX) */}
                         <div className="border border-zinc-300 bg-zinc-50 p-6 relative overflow-hidden">
-                            <div className="flex justify-between items-center mb-6 relative z-10">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 relative z-10 gap-4">
                                 <h3 className="font-jura font-bold text-lg uppercase flex items-center gap-2">
-                                    <Cpu size={20} className="text-blue-600"/> AI IMAGE LAB <span className="text-xs font-mono bg-black text-white px-2 py-0.5 rounded">FLUX MODEL</span>
+                                    <Cpu size={20} className="text-blue-600"/> AI IMAGE LAB
                                 </h3>
+                                {/* MODEL SELECTOR */}
+                                <div className="flex items-center gap-2">
+                                    <label className="text-[10px] font-mono uppercase text-zinc-500 font-bold">MODEL:</label>
+                                    <select 
+                                        className="border border-black bg-white px-2 py-1 text-xs font-mono uppercase focus:outline-none focus:ring-1 focus:ring-blue-600"
+                                        value={selectedModel}
+                                        onChange={(e) => setSelectedModel(e.target.value)}
+                                    >
+                                        {AI_MODELS.map(m => (
+                                            <option key={m.id} value={m.id}>{m.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
 
                             <div className="flex gap-6 relative z-10">
@@ -554,7 +576,7 @@ const AdminProducts: React.FC = () => {
                                 </div>
 
                                 <div className="flex-1">
-                                    <p className="text-[10px] font-mono font-bold uppercase mb-2 text-zinc-500">2. GENERATION GRID</p>
+                                    <p className="text-[10px] font-mono font-bold uppercase mb-2 text-zinc-500">2. GENERATION GRID ({selectedModel.toUpperCase()})</p>
                                     <div className="grid grid-cols-4 gap-3">
                                         {genSlots.slice(0, 4).map((slot, idx) => (
                                             <div key={slot.id} className="relative group">

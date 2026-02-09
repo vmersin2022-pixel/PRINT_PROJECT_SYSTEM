@@ -36,8 +36,8 @@ export const aiService = {
      * ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ (Lookbook)
      * Через собственный микросервис на Amvera.
      */
-    generateLookbook: async (imageUrl: string, promptText: string) => {
-        console.log("AI Proxy: Connecting to microservice...");
+    generateLookbook: async (imageUrl: string, promptText: string, model: string = 'flux') => {
+        console.log(`AI Proxy: Connecting to microservice (Model: ${model})...`);
         
         // -----------------------------------------------------------
         // ВАЖНО: АДРЕС ПРОКСИ-СЕРВЕРА
@@ -58,7 +58,7 @@ export const aiService = {
                 body: JSON.stringify({
                     prompt: promptText,
                     imageUrl: imageUrl,
-                    model: 'flux', // Лучшая модель для фотореализма
+                    model: model, // Dynamic model selection
                     width: 1024,
                     height: 1024
                 })
