@@ -1,12 +1,8 @@
 
 import { supabase } from '../supabaseClient';
 
-// Вспомогательная функция задержки
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 export const aiService = {
     // 1. Генерация текста (Название и Описание)
-    // Текст оставляем пока как есть (или можно тоже перенести на прокси позже)
     generateProductDescription: async (name: string, categories: string[]) => {
         const prompt = `Ты креативный директор бренда одежды "PRINT PROJECT". 
         Данные: Название "${name}", Категории: ${categories.join(', ')}.
@@ -33,48 +29,48 @@ export const aiService = {
         }
     },
 
-    // 2. ГЕНЕРАЦИЯ ЛУКБУКА (Image-to-Image / Vision)
-    // Используем Supabase Proxy для обхода ограничений
+    // 2. ГЕНЕРАЦИЯ ЛУКБУКА (Direct Client-Side)
+    // Переключено на прямой запрос из браузера, чтобы избежать проблем с деплоем Edge Functions
     generateLookbook: async (imageUrl: string, promptText: string) => {
         const seed = Math.floor(Math.random() * 1000000);
         const model = "flux"; 
 
         const enhancedPrompt = `${promptText}. The photo MUST feature a black t-shirt with the specific graphic design provided in the image input. High quality, photorealistic, 8k, professional fashion photography, detailed texture.`;
         
+        // Получаем ключ из переменных окружения (поддержка Vite)
+        const apiKey = (import.meta as any).env?.VITE_POLLINATIONS_KEY || 'sk_U9eN3uLF7gwPgVR7VW1Nv5q6A5L8ujI1';
+
+        const encodedPrompt = encodeURIComponent(enhancedPrompt);
+        const encodedImage = imageUrl ? encodeURIComponent(imageUrl) : '';
+        
+        let url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=${model}&width=1024&height=1024&seed=${seed}&nologo=true&enhance=false`;
+        
+        if (encodedImage) {
+            url += `&image=${encodedImage}`;
+        }
+
         try {
-            // Вызываем нашу серверную функцию
-            // ВАЖНО: responseType: 'blob' чтобы получить картинку, а не JSON
-            const { data, error } = await supabase.functions.invoke('generate-image', {
-                body: {
-                    prompt: enhancedPrompt,
-                    imageUrl: imageUrl,
-                    model: model,
-                    width: 1024,
-                    height: 1024,
-                    seed: seed
-                },
-                responseType: 'blob' 
+            console.log("Generating AI Image via Direct Link...");
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    // Если ключ есть, добавляем его. Если нет - Pollinations работает бесплатно (но медленнее)
+                    ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {})
+                }
             });
 
-            if (error) {
-                // Пытаемся прочитать текст ошибки из blob, если вернулся JSON с ошибкой
-                if (error instanceof Blob) {
-                    const text = await (error as any).text();
-                    throw new Error(text);
-                }
-                throw error;
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`AI Provider Error: ${response.status} ${errText}`);
             }
 
-            if (!(data instanceof Blob)) {
-                throw new Error("Invalid response format from server");
-            }
-            
-            // Создаем ссылку на полученный Blob
-            return URL.createObjectURL(data);
+            const blob = await response.blob();
+            return URL.createObjectURL(blob);
 
         } catch (error: any) {
             console.error("Image Gen Error:", error);
-            throw new Error(`Ошибка генерации: ${error.message || 'Server Error'}`);
+            throw new Error(`Ошибка генерации: ${error.message || 'Network Error'}`);
         }
     }
 };
