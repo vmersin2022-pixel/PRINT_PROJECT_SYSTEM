@@ -42,30 +42,33 @@ export const aiService = {
     },
 
     // 2. ГЕНЕРАЦИЯ ЛУКБУКА (Image-to-Image / Vision)
-    // Используем GET запрос к image.pollinations.ai с моделью klein-large и АВТОРИЗАЦИЕЙ
+    // Используем GET запрос к image.pollinations.ai с моделью FLUX
     generateLookbook: async (imageUrl: string, promptText: string) => {
         const apiKey = getPollinationsKey();
         const seed = Math.floor(Math.random() * 1000000);
-        // Добавляем ключевые слова для реализма
-        const enhancedPrompt = `${promptText}, photorealistic, 8k, highly detailed, professional photography, fashion shoot, wearing black t-shirt`;
+        const model = "flux"; 
+
+        // Flux требует детального описания сцены.
+        // Мы явно указываем, что принт (imageUrl) должен быть на футболке.
+        const enhancedPrompt = `${promptText}. The photo MUST feature a black t-shirt with the specific graphic design provided in the image input. High quality, photorealistic, 8k, professional fashion photography, detailed texture.`;
         
         // Кодируем параметры
         const encodedPrompt = encodeURIComponent(enhancedPrompt);
         const encodedImage = encodeURIComponent(imageUrl);
         
         // Формируем URL
-        // model=klein-large - для высокого качества
-        // nologo=true - убираем водяной знак (работает лучше с ключом)
-        // enhance=true - улучшаем промпт автоматически
-        const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=klein-large&width=1024&height=1024&seed=${seed}&nologo=true&enhance=true&image=${encodedImage}`;
+        // model=flux - лучшая модель для композиции
+        // image=... - передаем ссылку на принт как исходник (Image-to-Image)
+        // nologo=true - убираем водяной знак
+        // enhance=false - отключаем авто-улучшение промпта, чтобы сохранить точность инструкции про принт
+        const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=${model}&width=1024&height=1024&seed=${seed}&nologo=true&enhance=false&image=${encodedImage}`;
 
         try {
             const headers: any = {};
             
-            // ВАЖНО: Добавляем ключ в заголовки запроса картинки
+            // ВАЖНО: Добавляем ключ в заголовки запроса картинки (если есть)
             if (apiKey) {
                 headers['Authorization'] = `Bearer ${apiKey}`;
-                // Иногда Pollinations требует User-Agent для корректной обработки ключа
                 headers['User-Agent'] = 'PrintProjectApp/1.0';
             }
 

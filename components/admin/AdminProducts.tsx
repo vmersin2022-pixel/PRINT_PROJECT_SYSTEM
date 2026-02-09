@@ -10,28 +10,27 @@ import { aiService } from '../../services/aiService';
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'OS'];
 const CATEGORIES: Category[] = ['t-shirts', 'sets', 'accessories', 'fresh_drop', 'last_drop'];
 
-// --- AI PROMPT PRESETS ---
-// Updated for Image-to-Image context
+// --- AI PROMPT PRESETS (Optimized for FLUX) ---
 const PROMPT_PRESETS: Record<string, { label: string, prompt: string }> = {
     'flat_lay': { 
         label: 'Каталожное (Flat Lay)', 
-        prompt: "A clean flat lay photo of a black oversized t-shirt on a white background. The shirt features the graphic print on the chest." 
+        prompt: "A professional flat lay photography of a high quality black cotton t-shirt isolated on a clean white background. The t-shirt features a graphic print on the chest. Soft studio lighting, 8k resolution, product photography." 
     },
     'closeup': { 
         label: 'Макро (Принт близко)', 
-        prompt: "Extreme close-up texture shot of a black cotton t-shirt fabric with a graphic print. High detail ink texture, cinematic lighting." 
+        prompt: "Extreme close-up macro shot of the fabric texture of a black t-shirt. The focus is on the graphic print ink details. Dramatic lighting, high contrast, 8k, detailed fabric grain." 
     },
     'model_m': { 
         label: 'Модель (Парень)', 
-        prompt: "A stylish young man wearing a black oversized t-shirt with the graphic print on the chest. Urban cyberpunk street background, neon lights." 
+        prompt: "A photo of a cool streetwear model man wearing a black oversized t-shirt with a graphic print. He is standing in a neon-lit cyberpunk city street at night. Bokeh background, cinematic lighting, fashion editorial style." 
     },
     'model_f': { 
         label: 'Модель (Девушка)', 
-        prompt: "A fashion model girl wearing a black oversized t-shirt with the graphic print on the chest. Studio grey background, dramatic lighting." 
+        prompt: "A photo of a fashion model woman wearing a loose black boyfriend t-shirt with a graphic print. Minimalist concrete studio background. Natural soft lighting, vogue style, 8k, photorealistic." 
     },
     'hanger': {
-        label: 'На вешалке',
-        prompt: "A black t-shirt hanging on a metal rack against a concrete wall. Industrial style. The shirt has a graphic print."
+        label: 'На вешалке (Lifestyle)',
+        prompt: "A black t-shirt hanging on a chrome clothing rack in a modern industrial loft apartment. Sunlight streaming through window. The shirt has a graphic print visible. Lifestyle photography."
     },
     'custom': {
         label: 'CUSTOM INPUT',
@@ -256,13 +255,9 @@ const AdminProducts: React.FC = () => {
         setIsSequencing(true);
         // Generate first 4 slots
         for (let i = 0; i < 4; i++) {
-            // Async call but we await it to avoid flooding if desired, 
-            // OR we can fire them all if rate limit allows. 
-            // Pollinations is fast, but let's be safe.
             generateSlot(i);
-            
             // Small stagger to not hit browser limit
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
         setIsSequencing(false);
     };
@@ -547,11 +542,11 @@ const AdminProducts: React.FC = () => {
                             <div className="col-span-2"><label className="block text-[10px] font-mono uppercase text-zinc-500 mb-1">Описание</label><textarea rows={3} className="w-full border border-zinc-300 p-3 font-mono text-sm focus:border-blue-600 outline-none" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} /></div>
                         </section>
 
-                        {/* AI LAB (UPDATED for Pollinations klein-large) */}
+                        {/* AI LAB (FLUX) */}
                         <div className="border border-zinc-300 bg-zinc-50 p-6 relative overflow-hidden">
                             <div className="flex justify-between items-center mb-6 relative z-10">
                                 <h3 className="font-jura font-bold text-lg uppercase flex items-center gap-2">
-                                    <Cpu size={20} className="text-blue-600"/> AI IMAGE LAB <span className="text-xs font-mono bg-black text-white px-2 py-0.5 rounded">KLEIN-LARGE MODEL</span>
+                                    <Cpu size={20} className="text-blue-600"/> AI IMAGE LAB <span className="text-xs font-mono bg-black text-white px-2 py-0.5 rounded">FLUX MODEL</span>
                                 </h3>
                                 <div className="flex items-center gap-4">
                                     <button onClick={handleRenderSequentially} disabled={!masterPrintUrl || isSequencing} className="bg-blue-600 text-white px-6 py-2 font-jura font-bold uppercase hover:bg-blue-700 transition-colors shadow-lg disabled:opacity-50 flex items-center gap-2">
@@ -594,7 +589,7 @@ const AdminProducts: React.FC = () => {
                                 </div>
 
                                 <div className="flex-1">
-                                    <p className="text-[10px] font-mono font-bold uppercase mb-2 text-zinc-500">2. BATCH GRID (4x VARIATIONS)</p>
+                                    <p className="text-[10px] font-mono font-bold uppercase mb-2 text-zinc-500">2. BATCH GRID (FLUX GENERATION)</p>
                                     <div className="grid grid-cols-4 gap-3">
                                         {genSlots.slice(0, 4).map((slot, idx) => (
                                             <div key={slot.id} className="relative group">
@@ -634,7 +629,7 @@ const AdminProducts: React.FC = () => {
                             </div>
                         </section>
 
-                        {/* ... VARIANTS & ATTRIBUTES (Existing Code) ... */}
+                        {/* VARIANTS & ATTRIBUTES */}
                         <div className="grid grid-cols-2 gap-6">
                             <div>
                                 <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-2">Категории</label>
