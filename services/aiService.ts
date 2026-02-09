@@ -5,8 +5,6 @@ const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const getPollinationsKey = () => {
     // Vite подтягивает переменные с префиксом VITE_ из окружения Amvera
     const apiKey = (import.meta as any).env?.VITE_POLLINATIONS_KEY || (import.meta as any).env?.VITE_API_KEY;
-    // Note: For image generation via GET, key might not be strictly required for free tier, 
-    // but good to have for text generation.
     return apiKey || "";
 };
 
@@ -44,8 +42,9 @@ export const aiService = {
     },
 
     // 2. ГЕНЕРАЦИЯ ЛУКБУКА (Image-to-Image / Vision)
-    // Используем GET запрос к image.pollinations.ai с моделью klein-large
+    // Используем GET запрос к image.pollinations.ai с моделью klein-large и АВТОРИЗАЦИЕЙ
     generateLookbook: async (imageUrl: string, promptText: string) => {
+        const apiKey = getPollinationsKey();
         const seed = Math.floor(Math.random() * 1000000);
         // Добавляем ключевые слова для реализма
         const enhancedPrompt = `${promptText}, photorealistic, 8k, highly detailed, professional photography, fashion shoot, wearing black t-shirt`;
@@ -56,16 +55,30 @@ export const aiService = {
         
         // Формируем URL
         // model=klein-large - для высокого качества
-        // nologo=true - убираем водяной знак
+        // nologo=true - убираем водяной знак (работает лучше с ключом)
         // enhance=true - улучшаем промпт автоматически
         const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=klein-large&width=1024&height=1024&seed=${seed}&nologo=true&enhance=true&image=${encodedImage}`;
 
         try {
-            // Делаем запрос, чтобы получить картинку как Blob
-            const response = await fetch(url);
+            const headers: any = {};
+            
+            // ВАЖНО: Добавляем ключ в заголовки запроса картинки
+            if (apiKey) {
+                headers['Authorization'] = `Bearer ${apiKey}`;
+                // Иногда Pollinations требует User-Agent для корректной обработки ключа
+                headers['User-Agent'] = 'PrintProjectApp/1.0';
+            }
+
+            // Делаем запрос с заголовками авторизации
+            const response = await fetch(url, { headers });
+            
             if (!response.ok) {
+                if (response.status === 429) {
+                    throw new Error(`Лимит генераций исчерпан. Подождите немного.`);
+                }
                 throw new Error(`Pollinations API Error: ${response.statusText}`);
             }
+            
             const blob = await response.blob();
             // Возвращаем временную ссылку на Blob для отображения
             return URL.createObjectURL(blob);
