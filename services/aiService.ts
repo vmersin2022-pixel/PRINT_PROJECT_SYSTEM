@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 
 export const aiService = {
     // 1. Генерация текста (Название и Описание)
+    // Оставляем как есть, так как текстовые запросы обычно короткие и проходят напрямую
     generateProductDescription: async (name: string, categories: string[]) => {
         const prompt = `Ты креативный директор бренда одежды "PRINT PROJECT". 
         Данные: Название "${name}", Категории: ${categories.join(', ')}.
@@ -29,87 +30,46 @@ export const aiService = {
         }
     },
 
-    // 2. ГЕНЕРАЦИЯ ЛУКБУКА (Smart Hybrid Mode)
+    // 2. ГЕНЕРАЦИЯ ЛУКБУКА (Server-Side Only)
     generateLookbook: async (imageUrl: string, promptText: string) => {
-        // Очищаем промпт от лишних знаков
+        // Подготовка промпта
         const cleanPrompt = promptText.trim().replace(/\.$/, ''); 
         const enhancedPrompt = `${cleanPrompt}. The photo MUST feature a black t-shirt with the specific graphic design provided in the image input. High quality, photorealistic, 8k, professional fashion photography, detailed texture.`;
         
-        console.log("AI Generation: Starting...");
+        console.log("AI Generation: Sending request to Supabase Edge Function...");
 
-        // ПОПЫТКА 1: Пробуем через твой сервер (Supabase Edge Function)
         try {
-            console.log("Attempt 1: Server-Side Proxy (Edge Function)...");
+            // Вызов серверной функции. Данные передаются в теле POST-запроса, 
+            // поэтому лимиты на длину URL больше не действуют.
             const { data, error } = await supabase.functions.invoke('generate-image', {
                 body: {
                     prompt: enhancedPrompt,
                     imageUrl: imageUrl,
-                    model: 'flux', // Explicitly request flux
+                    model: 'flux', // Принудительно используем Flux
                     width: 1024,
                     height: 1024,
                     seed: Math.floor(Math.random() * 1000000)
                 },
-                responseType: 'blob'
+                responseType: 'blob' // Ожидаем бинарный файл (картинку)
             });
 
             if (error) {
-                console.warn("Edge Function Error:", error);
-                throw error;
+                // Пытаемся прочитать текст ошибки, если он есть
+                console.error("Edge Function Error Details:", error);
+                throw new Error(`Server Error: ${error.message || 'Unknown error'}`);
             }
 
             if (!(data instanceof Blob)) {
-                throw new Error("Invalid server response format");
+                throw new Error("Invalid server response format (Expected Blob)");
             }
 
-            console.log("Server generation successful!");
+            console.log("Server generation successful! Image received.");
             return URL.createObjectURL(data);
 
-        } catch (serverError: any) {
-            console.warn("Edge Function Failed. Falling back to Direct Link.", serverError.message);
-            
-            // ПОПЫТКА 2: Фолбэк на прямой запрос
-            try {
-                // Ждем 1 секунду перед фолбэком, чтобы не спамить
-                await new Promise(r => setTimeout(r, 1000));
-
-                const seed = Math.floor(Math.random() * 1000000);
-                const encodedPrompt = encodeURIComponent(enhancedPrompt);
-                
-                // В браузере лучше использовать более простой URL, если есть картинка
-                let url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=flux&width=1024&height=1024&seed=${seed}&nologo=true`;
-                
-                if (imageUrl) {
-                    const encodedImage = encodeURIComponent(imageUrl);
-                    url += `&image=${encodedImage}`;
-                }
-
-                // Пытаемся использовать ключ если он доступен в ENV (Vite)
-                const clientKey = (import.meta as any).env?.VITE_POLLINATIONS_KEY;
-                const headers: any = {};
-                if (clientKey) {
-                    // Некоторые прокси Pollinations могут принимать ключ в заголовке, но основной публичный GET может игнорировать
-                    // Попробуем, хуже не будет
-                    headers['Authorization'] = `Bearer ${clientKey}`; 
-                }
-
-                console.log("Attempt 2: Client-Side Direct Fetch...");
-                const response = await fetch(url, { 
-                    method: 'GET',
-                    headers: headers
-                }); 
-
-                if (!response.ok) {
-                    const errText = await response.text();
-                    throw new Error(`AI Provider Error: ${response.status} ${errText.substring(0, 100)}`);
-                }
-
-                const blob = await response.blob();
-                return URL.createObjectURL(blob);
-
-            } catch (clientError: any) {
-                console.error("All generation methods failed:", clientError);
-                throw new Error(`Ошибка генерации: ${clientError.message}`);
-            }
+        } catch (err: any) {
+            console.error("Generation Failed:", err);
+            // Прокидываем понятную ошибку на фронтенд
+            throw new Error(`Ошибка генерации: ${err.message}. Попробуйте позже.`);
         }
     }
 };
