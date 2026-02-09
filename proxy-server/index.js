@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 80;
 app.use(cors({
     origin: '*', // В продакшене лучше заменить на адрес твоего сайта
     methods: ['POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type']
+    allowedHeaders: ['Content-Type', 'Authorization'] // Added Authorization to allowed headers
 }));
 
 app.use(express.json());
@@ -30,9 +30,10 @@ app.post('/generate', async (req, res) => {
             return res.status(400).json({ error: 'Prompt is required' });
         }
 
-        // 1. Construct the sophisticated prompt
-        const enhancedPrompt = `${prompt}. Professional fashion photography, high-end commercial style, 8k resolution, crisp details, photorealistic lighting.`;
-        const encodedPrompt = encodeURIComponent(enhancedPrompt);
+        // 1. Construct the URL
+        // REMOVED: The automatic suffix ". Professional fashion photography..."
+        // Now we send exactly what the user typed/selected.
+        const encodedPrompt = encodeURIComponent(prompt);
         
         // 2. Build the Pollinations URL
         // Adding random seed to ensure variety
@@ -44,6 +45,7 @@ app.post('/generate', async (req, res) => {
         }
 
         console.log(`--> Proxying to AI Provider: ${model || 'flux'}`);
+        console.log(`--> Prompt: ${prompt.substring(0, 50)}...`);
 
         // 3. Server-to-Server Fetch
         // This runs on the server, so no CORS issues and stable connection
@@ -51,8 +53,8 @@ app.post('/generate', async (req, res) => {
             method: 'GET',
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) PrintProjectProxy/1.0',
-                // Optional: Add authorization if you decide to buy a key later
-                // 'Authorization': `Bearer ${process.env.POLLINATIONS_API_KEY}`
+                // Authorization header is used if provided in env vars
+                'Authorization': `Bearer ${process.env.POLLINATIONS_API_KEY}`
             },
             timeout: 120000 // 2 minutes timeout (Amvera allows long connections)
         });
@@ -60,7 +62,7 @@ app.post('/generate', async (req, res) => {
         if (!aiResponse.ok) {
             const errText = await aiResponse.text();
             console.error('AI Provider Error:', errText);
-            throw new Error(`Provider responded with ${aiResponse.status}`);
+            throw new Error(`Provider responded with ${aiResponse.status}: ${errText}`);
         }
 
         // 4. Stream the image back to the frontend
