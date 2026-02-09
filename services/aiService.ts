@@ -12,7 +12,7 @@ const getPollinationsKey = () => {
     return apiKey;
 };
 
-// Сжатие изображения для ускорения передачи данных
+// Сжатие изображения для корректной передачи Vision-модели
 const compressImage = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -20,7 +20,7 @@ const compressImage = async (file: File): Promise<string> => {
         reader.onload = (e) => { img.src = e.target?.result as string; };
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            const MAX_DIMENSION = 800; // Оптимально для Pollinations
+            const MAX_DIMENSION = 800; 
             let width = img.width, height = img.height;
             if (width > height) {
                 if (width > MAX_DIMENSION) { height *= MAX_DIMENSION / width; width = MAX_DIMENSION; }
@@ -42,10 +42,10 @@ const compressImage = async (file: File): Promise<string> => {
 };
 
 export const aiService = {
-    // 1. Генерация текста через Unified API
+    // 1. Генерация текста (Название и Описание)
     generateProductDescription: async (name: string, categories: string[]) => {
         const apiKey = getPollinationsKey();
-        const prompt = `Ты креативный директор киберпанк-бренда одежды "PRINT PROJECT". 
+        const prompt = `Ты креативный директор бренда одежды "PRINT PROJECT". 
         Данные: Название "${name}", Категории: ${categories.join(', ')}.
         Задача: Придумай название и техническое описание. 
         Верни ТОЛЬКО чистый JSON объект: { "name": "...", "description": "..." }`;
@@ -65,17 +65,15 @@ export const aiService = {
 
             const data = await response.json();
             const text = data.choices[0].message.content;
-            
-            // Очистка от markdown-оберток ```json ... ```
             const cleanJson = text.replace(/```json|```/g, "").trim();
             return JSON.parse(cleanJson);
         } catch (e) {
             console.error("Text Gen Error:", e);
-            throw new Error("Ошибка генерации описания товара.");
+            throw new Error("Ошибка генерации текста.");
         }
     },
 
-    // 2. Генерация изображений через Klein Large (Vision Mode)
+    // 2. ГЕНЕРАЦИЯ ЛУКБУКА (Image-to-Image / Vision)
     generateLookbook: async (imageFile: File, promptText: string) => {
         const apiKey = getPollinationsKey();
         const base64Image = await compressImage(imageFile);
@@ -88,14 +86,20 @@ export const aiService = {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    model: "klein-large", 
+                    // Модель 'p1' — лучшая для Vision-задач в Pollinations (текст + картинка)
+                    model: "p1", 
                     messages: [
                         {
                             role: "user",
                             content: [
                                 { 
                                     type: "text", 
-                                    text: `${promptText}. Highly detailed apparel mockup, realistic fabric, professional studio lighting. The attached image is the print design to be applied on the t-shirt.` 
+                                    text: `ACT AS A FASHION PHOTOGRAPHER. 
+                                    USER PROMPT: ${promptText}. 
+                                    ATTACHED IMAGE: This is the graphic print design. 
+                                    TASK: Generate a photorealistic image of a person or mockup wearing a black t-shirt. 
+                                    IMPORTANT: Place the ATTACHED IMAGE design on the center of the chest of the generated t-shirt. 
+                                    High detail, professional studio lighting, 8k resolution.` 
                                 },
                                 { 
                                     type: "image_url", 
@@ -103,10 +107,8 @@ export const aiService = {
                                 }
                             ]
                         }
-                    ],
-                    seed: Math.floor(Math.random() * 1000000),
-                    width: 768,
-                    height: 1024
+                    ]
+                    // Мы не добавляем width/height сюда, чтобы избежать ошибок валидации JSON 400
                 })
             });
 
@@ -118,19 +120,19 @@ export const aiService = {
             const data = await response.json();
             const content = data.choices[0].message.content;
 
-            // Извлечение ссылки на изображение из ответа (Markdown или прямой URL)
+            // Извлечение прямой ссылки из Markdown-ответа ![image](https://...)
             const urlMatch = content.match(/\((https:\/\/.*?)\)/);
             const imageUrl = urlMatch ? urlMatch[1] : content.trim();
 
             if (!imageUrl.startsWith('http')) {
-                throw new Error("API не вернул корректную ссылку на изображение.");
+                throw new Error("API не вернул ссылку на изображение. Попробуйте другой промпт.");
             }
 
             return imageUrl;
 
         } catch (error: any) {
             console.error("Image Gen Error:", error);
-            throw new Error(`Ошибка генерации лукбука: ${error.message}`);
+            throw new Error(`Ошибка лукбука: ${error.message}`);
         }
     }
 };
