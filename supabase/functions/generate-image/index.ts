@@ -3,8 +3,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 declare const Deno: any;
 
-// Получаем ключ из секретов Supabase (нужно добавить его в Dashboard)
-const API_KEY = Deno.env.get('POLLINATIONS_API_KEY') || Deno.env.get('VITE_POLLINATIONS_KEY');
+// Получаем ключ из секретов Supabase ИЛИ используем хардкод-значение из .env для быстрого старта
+const API_KEY = Deno.env.get('POLLINATIONS_API_KEY') || Deno.env.get('VITE_POLLINATIONS_KEY') || 'sk_U9eN3uLF7gwPgVR7VW1Nv5q6A5L8ujI1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,19 +25,20 @@ serve(async (req) => {
     }
 
     // 2. Construct Pollinations URL
+    // Используем 'flux' как более стабильную модель, или то что передали
+    const selectedModel = model || 'flux'; 
     const encodedPrompt = encodeURIComponent(prompt);
-    const encodedImage = imageUrl ? encodeURIComponent(imageUrl) : '';
     
     // Формируем URL
-    let url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=${model || 'flux'}&width=${width || 1024}&height=${height || 1024}&seed=${seed || 42}&nologo=true&enhance=false`;
+    let url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=${selectedModel}&width=${width || 1024}&height=${height || 1024}&seed=${seed || 42}&nologo=true&enhance=false`;
     
-    if (encodedImage) {
+    if (imageUrl) {
+        const encodedImage = encodeURIComponent(imageUrl);
         url += `&image=${encodedImage}`;
     }
 
     // 3. Server-to-Server Request with Authorization Header
-    // Серверы могут обмениваться заголовками без CORS блокировок
-    console.log("Proxying to AI:", url);
+    console.log("Proxying to AI with Key:", API_KEY.slice(0, 5) + "...");
     
     const response = await fetch(url, {
         method: 'GET',
@@ -49,7 +50,7 @@ serve(async (req) => {
 
     if (!response.ok) {
         const errText = await response.text();
-        console.error("AI Error:", errText);
+        console.error("AI Error Body:", errText);
         throw new Error(`AI Provider Error: ${response.status} ${response.statusText}`);
     }
 
@@ -60,7 +61,7 @@ serve(async (req) => {
       headers: {
         ...corsHeaders,
         'Content-Type': 'image/jpeg',
-        'Cache-Control': 'public, max-age=31536000' // Кэшируем успешный результат
+        'Cache-Control': 'public, max-age=31536000'
       },
       status: 200,
     })
