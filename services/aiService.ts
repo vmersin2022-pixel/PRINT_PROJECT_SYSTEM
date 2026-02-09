@@ -37,8 +37,8 @@ export const aiService = {
 
         const enhancedPrompt = `${promptText}. The photo MUST feature a black t-shirt with the specific graphic design provided in the image input. High quality, photorealistic, 8k, professional fashion photography, detailed texture.`;
         
-        // Получаем ключ из переменных окружения (поддержка Vite)
-        const apiKey = (import.meta as any).env?.VITE_POLLINATIONS_KEY || 'sk_U9eN3uLF7gwPgVR7VW1Nv5q6A5L8ujI1';
+        // CORS FIX: Не используем API Key в браузере, так как сервер Pollinations блокирует заголовок Authorization от клиентов.
+        // Используем публичный бесплатный доступ.
 
         const encodedPrompt = encodeURIComponent(enhancedPrompt);
         const encodedImage = imageUrl ? encodeURIComponent(imageUrl) : '';
@@ -50,14 +50,11 @@ export const aiService = {
         }
 
         try {
-            console.log("Generating AI Image via Direct Link...");
+            console.log("Generating AI Image via Direct Link (Public Tier)...");
             
+            // Убрали headers с Authorization
             const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    // Если ключ есть, добавляем его. Если нет - Pollinations работает бесплатно (но медленнее)
-                    ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {})
-                }
+                method: 'GET'
             });
 
             if (!response.ok) {
