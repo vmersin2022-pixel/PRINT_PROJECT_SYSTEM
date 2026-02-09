@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 export const aiService = {
     /**
      * ГЕНЕРАЦИЯ ТЕКСТА
-     * Текстовые запросы легкие, поэтому используем прямой POST запрос к Pollinations API.
+     * Текстовые запросы легкие, используем прямой вызов.
      */
     generateProductDescription: async (name: string, categories: string[]) => {
         const prompt = `Ты креативный директор бренда одежды "PRINT PROJECT". 
@@ -34,45 +34,51 @@ export const aiService = {
 
     /**
      * ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ (Lookbook)
-     * СТРОГО ЧЕРЕЗ ПРОКСИ (Edge Function). 
-     * Решает проблему CORS, Rate Limits и 502 (длинные URL).
+     * Через собственный микросервис на Amvera.
      */
     generateLookbook: async (imageUrl: string, promptText: string) => {
-        console.log("AI Proxy: Initiating secure server-side generation...");
+        console.log("AI Proxy: Connecting to microservice...");
         
+        // -----------------------------------------------------------
+        // ВАЖНО: АДРЕС ПРОКСИ-СЕРВЕРА
+        // Используем вашу ссылку + эндпоинт /generate
+        // -----------------------------------------------------------
+        const PROXY_URL = 'https://proxy-julia2806.amvera.io/generate'; 
+
+        if (PROXY_URL.includes('YOUR-PROXY-APP-NAME')) {
+            console.warn("ВНИМАНИЕ: Адрес прокси-сервера не настроен в aiService.ts");
+        }
+
         try {
-            // Вызываем функцию в Supabase. Она сама знает секретный ключ (из env).
-            const { data, error } = await supabase.functions.invoke('generate-image', {
-                body: {
+            const response = await fetch(PROXY_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
                     prompt: promptText,
                     imageUrl: imageUrl,
-                    model: 'flux',
+                    model: 'flux', // Лучшая модель для фотореализма
                     width: 1024,
                     height: 1024
-                },
-                responseType: 'blob' // Получаем картинку как бинарный объект напрямую
+                })
             });
 
-            if (error) {
-                console.error("Edge Function Error Details:", error);
-                throw new Error(error.message || "Ошибка сервера при генерации");
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.details || `Ошибка сервера: ${response.status}`);
             }
 
-            if (!(data instanceof Blob)) {
-                throw new Error("Неверный формат ответа от сервера (ожидался Blob)");
-            }
-
+            // Получаем картинку как Blob (бинарные данные)
+            const blob = await response.blob();
             console.log("Image received successfully via proxy.");
-            // Создаем временную локальную ссылку для предпросмотра
-            return URL.createObjectURL(data);
+            
+            // Создаем ссылку для отображения в браузере
+            return URL.createObjectURL(blob);
 
         } catch (err: any) {
             console.error("AI Generation Failed:", err);
-            // Если ошибка "Requested entity was not found", значит функция не развернута
-            const userFriendlyError = err.message.includes('404') 
-                ? "Прокси-сервер не найден. Проверьте развертывание Edge Function."
-                : err.message;
-            throw new Error(`Генерация не удалась: ${userFriendlyError}`);
+            throw new Error(`Генерация не удалась: ${err.message}. Проверьте, запущен ли прокси-сервер.`);
         }
     }
 };
