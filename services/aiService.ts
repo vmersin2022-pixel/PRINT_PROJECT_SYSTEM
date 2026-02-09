@@ -19,6 +19,7 @@ export const aiService = {
 
         try {
             const headers: any = { 'Content-Type': 'application/json' };
+            // Text API обычно нормально принимает ключи, но если будет ошибка - можно убрать и здесь
             if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
 
             const response = await fetch('https://text.pollinations.ai/openai', {
@@ -44,7 +45,6 @@ export const aiService = {
     // 2. ГЕНЕРАЦИЯ ЛУКБУКА (Image-to-Image / Vision)
     // Используем GET запрос к image.pollinations.ai с моделью FLUX
     generateLookbook: async (imageUrl: string, promptText: string) => {
-        const apiKey = getPollinationsKey();
         const seed = Math.floor(Math.random() * 1000000);
         const model = "flux"; 
 
@@ -64,16 +64,9 @@ export const aiService = {
         const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=${model}&width=1024&height=1024&seed=${seed}&nologo=true&enhance=false&image=${encodedImage}`;
 
         try {
-            const headers: any = {};
-            
-            // ВАЖНО: Добавляем ключ в заголовки запроса картинки (если есть)
-            if (apiKey) {
-                headers['Authorization'] = `Bearer ${apiKey}`;
-                headers['User-Agent'] = 'PrintProjectApp/1.0';
-            }
-
-            // Делаем запрос с заголовками авторизации
-            const response = await fetch(url, { headers });
+            // ВАЖНО: Убираем headers с Authorization для GET запроса картинки.
+            // Сервер pollinations не разрешает этот заголовок в CORS для браузера.
+            const response = await fetch(url);
             
             if (!response.ok) {
                 if (response.status === 429) {
