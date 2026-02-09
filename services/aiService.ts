@@ -1,44 +1,13 @@
+
 // Вспомогательная функция задержки
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const getPollinationsKey = () => {
     // Vite подтягивает переменные с префиксом VITE_ из окружения Amvera
     const apiKey = (import.meta as any).env?.VITE_POLLINATIONS_KEY || (import.meta as any).env?.VITE_API_KEY;
-
-    if (!apiKey || apiKey === "undefined") {
-        console.error("Pollinations API Key is missing in Amvera settings.");
-        throw new Error("API Key не найден! Добавьте VITE_POLLINATIONS_KEY в настройки Amvera.");
-    }
-    return apiKey;
-};
-
-// Сжатие изображения для корректной передачи Vision-модели
-const compressImage = async (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        const reader = new FileReader();
-        reader.onload = (e) => { img.src = e.target?.result as string; };
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const MAX_DIMENSION = 800; 
-            let width = img.width, height = img.height;
-            if (width > height) {
-                if (width > MAX_DIMENSION) { height *= MAX_DIMENSION / width; width = MAX_DIMENSION; }
-            } else {
-                if (height > MAX_DIMENSION) { width *= MAX_DIMENSION / height; height = MAX_DIMENSION; }
-            }
-            canvas.width = width; canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return reject(new Error("Canvas Error"));
-            
-            ctx.fillStyle = "#FFFFFF";
-            ctx.fillRect(0, 0, width, height);
-            ctx.drawImage(img, 0, 0, width, height);
-            
-            resolve(canvas.toDataURL('image/jpeg', 0.8));
-        };
-        reader.readAsDataURL(file);
-    });
+    // Note: For image generation via GET, key might not be strictly required for free tier, 
+    // but good to have for text generation.
+    return apiKey || "";
 };
 
 export const aiService = {
@@ -51,12 +20,12 @@ export const aiService = {
         Верни ТОЛЬКО чистый JSON объект: { "name": "...", "description": "..." }`;
 
         try {
-            const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
+            const headers: any = { 'Content-Type': 'application/json' };
+            if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+            const response = await fetch('https://text.pollinations.ai/openai', {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json'
-                },
+                headers: headers,
                 body: JSON.stringify({
                     model: "openai", 
                     messages: [{ role: "user", content: prompt }]
@@ -64,75 +33,45 @@ export const aiService = {
             });
 
             const data = await response.json();
-            const text = data.choices[0].message.content;
+            const text = data.choices?.[0]?.message?.content || data.content || "";
             const cleanJson = text.replace(/```json|```/g, "").trim();
             return JSON.parse(cleanJson);
         } catch (e) {
             console.error("Text Gen Error:", e);
-            throw new Error("Ошибка генерации текста.");
+            // Fallback mock if API fails
+            return { name: name, description: "Автоматическое описание (API Error)" };
         }
     },
 
     // 2. ГЕНЕРАЦИЯ ЛУКБУКА (Image-to-Image / Vision)
-    generateLookbook: async (imageFile: File, promptText: string) => {
-        const apiKey = getPollinationsKey();
-        const base64Image = await compressImage(imageFile);
+    // Используем GET запрос к image.pollinations.ai с моделью klein-large
+    generateLookbook: async (imageUrl: string, promptText: string) => {
+        const seed = Math.floor(Math.random() * 1000000);
+        // Добавляем ключевые слова для реализма
+        const enhancedPrompt = `${promptText}, photorealistic, 8k, highly detailed, professional photography, fashion shoot, wearing black t-shirt`;
+        
+        // Кодируем параметры
+        const encodedPrompt = encodeURIComponent(enhancedPrompt);
+        const encodedImage = encodeURIComponent(imageUrl);
+        
+        // Формируем URL
+        // model=klein-large - для высокого качества
+        // nologo=true - убираем водяной знак
+        // enhance=true - улучшаем промпт автоматически
+        const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=klein-large&width=1024&height=1024&seed=${seed}&nologo=true&enhance=true&image=${encodedImage}`;
 
         try {
-            const response = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    // Модель 'p1' — лучшая для Vision-задач в Pollinations (текст + картинка)
-                    model: "p1", 
-                    messages: [
-                        {
-                            role: "user",
-                            content: [
-                                { 
-                                    type: "text", 
-                                    text: `ACT AS A FASHION PHOTOGRAPHER. 
-                                    USER PROMPT: ${promptText}. 
-                                    ATTACHED IMAGE: This is the graphic print design. 
-                                    TASK: Generate a photorealistic image of a person or mockup wearing a black t-shirt. 
-                                    IMPORTANT: Place the ATTACHED IMAGE design on the center of the chest of the generated t-shirt. 
-                                    High detail, professional studio lighting, 8k resolution.` 
-                                },
-                                { 
-                                    type: "image_url", 
-                                    image_url: { url: base64Image } 
-                                }
-                            ]
-                        }
-                    ]
-                    // Мы не добавляем width/height сюда, чтобы избежать ошибок валидации JSON 400
-                })
-            });
-
+            // Делаем запрос, чтобы получить картинку как Blob
+            const response = await fetch(url);
             if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error?.message || "Pollinations API Error");
+                throw new Error(`Pollinations API Error: ${response.statusText}`);
             }
-
-            const data = await response.json();
-            const content = data.choices[0].message.content;
-
-            // Извлечение прямой ссылки из Markdown-ответа ![image](https://...)
-            const urlMatch = content.match(/\((https:\/\/.*?)\)/);
-            const imageUrl = urlMatch ? urlMatch[1] : content.trim();
-
-            if (!imageUrl.startsWith('http')) {
-                throw new Error("API не вернул ссылку на изображение. Попробуйте другой промпт.");
-            }
-
-            return imageUrl;
-
+            const blob = await response.blob();
+            // Возвращаем временную ссылку на Blob для отображения
+            return URL.createObjectURL(blob);
         } catch (error: any) {
             console.error("Image Gen Error:", error);
-            throw new Error(`Ошибка лукбука: ${error.message}`);
+            throw new Error(`Ошибка генерации: ${error.message}`);
         }
     }
 };

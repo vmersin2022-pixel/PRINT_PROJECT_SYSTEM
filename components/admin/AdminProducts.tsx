@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { Product, Category } from '../../types';
@@ -10,26 +11,27 @@ const SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'OS'];
 const CATEGORIES: Category[] = ['t-shirts', 'sets', 'accessories', 'fresh_drop', 'last_drop'];
 
 // --- AI PROMPT PRESETS ---
+// Updated for Image-to-Image context
 const PROMPT_PRESETS: Record<string, { label: string, prompt: string }> = {
     'flat_lay': { 
         label: 'Каталожное (Flat Lay)', 
-        prompt: "Professional flat lay photography of a black oversized t-shirt on a clean white background. Soft studio lighting, minimal shadows. High resolution, e-commerce style." 
+        prompt: "A clean flat lay photo of a black oversized t-shirt on a white background. The shirt features the graphic print on the chest." 
     },
     'closeup': { 
         label: 'Макро (Принт близко)', 
-        prompt: "Macro close-up shot of the print texture on fabric. High detail, sharp focus on the ink and fabric texture. Cinematic lighting, depth of field." 
+        prompt: "Extreme close-up texture shot of a black cotton t-shirt fabric with a graphic print. High detail ink texture, cinematic lighting." 
     },
     'model_m': { 
         label: 'Модель (Парень)', 
-        prompt: "Streetwear fashion photography. A stylish young man wearing a black oversized t-shirt with the print. Urban environment, concrete walls, neon lights in background. Cyberpunk vibe." 
+        prompt: "A stylish young man wearing a black oversized t-shirt with the graphic print on the chest. Urban cyberpunk street background, neon lights." 
     },
     'model_f': { 
         label: 'Модель (Девушка)', 
-        prompt: "High fashion photography. A cool model girl wearing a black oversized t-shirt with the print. Minimalist studio setting with dramatic lighting. 8k resolution." 
+        prompt: "A fashion model girl wearing a black oversized t-shirt with the graphic print on the chest. Studio grey background, dramatic lighting." 
     },
     'hanger': {
         label: 'На вешалке',
-        prompt: "A black t-shirt hanging on a metal rack against a raw concrete wall. Industrial loft style, soft daylight."
+        prompt: "A black t-shirt hanging on a metal rack against a concrete wall. Industrial style. The shirt has a graphic print."
     },
     'custom': {
         label: 'CUSTOM INPUT',
@@ -89,6 +91,9 @@ const AdminProducts: React.FC = () => {
     // --- AI LAB STATE ---
     const [masterPrintFile, setMasterPrintFile] = useState<File | null>(null);
     const [masterPreview, setMasterPreview] = useState<string | null>(null);
+    const [masterPrintUrl, setMasterPrintUrl] = useState<string | null>(null); // PUBLIC URL FOR AI
+    const [isUploadingMaster, setIsUploadingMaster] = useState(false);
+
     const [textGenLoading, setTextGenLoading] = useState(false);
     const [customPrompt, setCustomPrompt] = useState('');
     const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -183,16 +188,38 @@ const AdminProducts: React.FC = () => {
         }
     };
 
-    const handleMasterUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleMasterUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
+            
+            // 1. Set local preview immediately
             setMasterPrintFile(file);
             setMasterPreview(URL.createObjectURL(file));
+            
+            // 2. Upload to Supabase to get Public URL for Pollinations
+            setIsUploadingMaster(true);
+            try {
+                const fileExt = file.name.split('.').pop();
+                // Use temp folder
+                const fileName = `temp/master_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+                
+                const { error } = await supabase.storage.from('images').upload(fileName, file);
+                if (error) throw error;
+                
+                const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+                setMasterPrintUrl(data.publicUrl);
+            } catch (err: any) {
+                alert('Ошибка загрузки макета: ' + err.message);
+                setMasterPrintFile(null);
+                setMasterPreview(null);
+            } finally {
+                setIsUploadingMaster(false);
+            }
         }
     };
 
     const generateSlot = async (slotIndex: number) => {
-        if (!masterPrintFile) return alert('Загрузите мастер-принт');
+        if (!masterPrintUrl) return alert('Подождите загрузку макета в облако...');
         
         const slot = genSlots[slotIndex];
         setGenSlots(prev => prev.map((s, idx) => 
@@ -208,7 +235,8 @@ const AdminProducts: React.FC = () => {
                 prompt = PROMPT_PRESETS[slot.presetKey].prompt;
             }
 
-            const imageUrl = await aiService.generateLookbook(masterPrintFile, prompt);
+            // Pass the Public URL to the AI Service
+            const imageUrl = await aiService.generateLookbook(masterPrintUrl, prompt);
             
             setGenSlots(prev => prev.map((s, idx) => 
                 idx === slotIndex ? { ...s, status: 'success', imageUrl } : s
@@ -223,19 +251,20 @@ const AdminProducts: React.FC = () => {
     };
 
     const handleRenderSequentially = async () => {
-        if (!masterPrintFile) return alert('Загрузите мастер-принт');
+        if (!masterPrintUrl) return alert('Подождите загрузку макета...');
         
         setIsSequencing(true);
+        // Generate first 4 slots
         for (let i = 0; i < 4; i++) {
-            await generateSlot(i);
+            // Async call but we await it to avoid flooding if desired, 
+            // OR we can fire them all if rate limit allows. 
+            // Pollinations is fast, but let's be safe.
+            generateSlot(i);
             
-            if (i < 3) {
-                setCooldownTimer(15);
-                await new Promise(resolve => setTimeout(resolve, 15000));
-            }
+            // Small stagger to not hit browser limit
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
         setIsSequencing(false);
-        setCooldownTimer(0);
     };
 
     const handleDownload = async (imageUrl: string) => {
@@ -301,8 +330,10 @@ const AdminProducts: React.FC = () => {
         });
         setEditingId(product.id);
         setIsEditorOpen(true);
+        // Reset AI Lab
         setMasterPrintFile(null);
         setMasterPreview(null);
+        setMasterPrintUrl(null);
         setCustomPrompt('');
         setGenSlots(prev => prev.map(s => ({ ...s, status: 'idle', imageUrl: null })));
     };
@@ -311,8 +342,10 @@ const AdminProducts: React.FC = () => {
         setFormData(INITIAL_FORM);
         setEditingId(null);
         setIsEditorOpen(true);
+        // Reset AI Lab
         setMasterPrintFile(null);
         setMasterPreview(null);
+        setMasterPrintUrl(null);
         setCustomPrompt('');
         setGenSlots(prev => prev.map(s => ({ ...s, status: 'idle', imageUrl: null })));
     };
@@ -484,6 +517,7 @@ const AdminProducts: React.FC = () => {
                 </table>
             </div>
 
+            {/* EDITOR DRAWER */}
             <div className={`fixed inset-0 z-[100] transition-all duration-300 ${isEditorOpen ? 'bg-black/40 pointer-events-auto' : 'pointer-events-none'}`} onClick={() => setIsEditorOpen(false)}>
                 <div onClick={e => e.stopPropagation()} className={`absolute right-0 top-0 h-full w-full max-w-4xl bg-white shadow-2xl border-l border-black transform transition-transform duration-300 flex flex-col ${isEditorOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                     <div className="p-6 border-b border-black flex justify-between items-center bg-zinc-50">
@@ -495,6 +529,7 @@ const AdminProducts: React.FC = () => {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                        {/* BASIC INFO */}
                         <section className="grid grid-cols-2 gap-6">
                             <div className="col-span-2 md:col-span-1">
                                 <div className="flex justify-between mb-1">
@@ -512,16 +547,14 @@ const AdminProducts: React.FC = () => {
                             <div className="col-span-2"><label className="block text-[10px] font-mono uppercase text-zinc-500 mb-1">Описание</label><textarea rows={3} className="w-full border border-zinc-300 p-3 font-mono text-sm focus:border-blue-600 outline-none" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} /></div>
                         </section>
 
+                        {/* AI LAB (UPDATED for Pollinations klein-large) */}
                         <div className="border border-zinc-300 bg-zinc-50 p-6 relative overflow-hidden">
                             <div className="flex justify-between items-center mb-6 relative z-10">
-                                <h3 className="font-jura font-bold text-lg uppercase flex items-center gap-2"><Cpu size={20} className="text-blue-600"/> AI IMAGE LAB <span className="text-xs font-mono bg-black text-white px-2 py-0.5 rounded">BATCH RENDER</span></h3>
+                                <h3 className="font-jura font-bold text-lg uppercase flex items-center gap-2">
+                                    <Cpu size={20} className="text-blue-600"/> AI IMAGE LAB <span className="text-xs font-mono bg-black text-white px-2 py-0.5 rounded">KLEIN-LARGE MODEL</span>
+                                </h3>
                                 <div className="flex items-center gap-4">
-                                    {cooldownTimer > 0 && (
-                                        <span className="text-xs font-mono text-orange-600 animate-pulse flex items-center gap-1">
-                                            <Clock size={12}/> NEXT IN: {cooldownTimer}s
-                                        </span>
-                                    )}
-                                    <button onClick={handleRenderSequentially} disabled={!masterPrintFile || isSequencing} className="bg-blue-600 text-white px-6 py-2 font-jura font-bold uppercase hover:bg-blue-700 transition-colors shadow-lg disabled:opacity-50 flex items-center gap-2">
+                                    <button onClick={handleRenderSequentially} disabled={!masterPrintUrl || isSequencing} className="bg-blue-600 text-white px-6 py-2 font-jura font-bold uppercase hover:bg-blue-700 transition-colors shadow-lg disabled:opacity-50 flex items-center gap-2">
                                         {isSequencing ? <Loader2 className="animate-spin" size={16}/> : <Sparkles size={16}/>} {isSequencing ? 'GENERATING...' : 'RENDER ALL'}
                                     </button>
                                 </div>
@@ -530,10 +563,34 @@ const AdminProducts: React.FC = () => {
                             <div className="flex gap-6 relative z-10">
                                 <div className="w-1/4 shrink-0">
                                     <p className="text-[10px] font-mono font-bold uppercase mb-2 text-zinc-500">1. MASTER SOURCE (PRINT)</p>
-                                    <div onClick={() => masterFileRef.current?.click()} className="aspect-[3/4] border-2 border-dashed border-zinc-400 bg-white flex flex-col items-center justify-center cursor-pointer hover:border-black transition-colors relative overflow-hidden">
-                                        {masterPreview ? <img src={masterPreview} className="w-full h-full object-contain p-2" /> : <div className="text-center text-zinc-400 p-4"><UploadCloud className="mx-auto mb-2"/><span className="text-[9px] uppercase block">UPLOAD PNG/JPG</span></div>}
+                                    <div onClick={() => masterFileRef.current?.click()} className="aspect-[3/4] border-2 border-dashed border-zinc-400 bg-white flex flex-col items-center justify-center cursor-pointer hover:border-black transition-colors relative overflow-hidden group">
+                                        {masterPreview ? (
+                                            <>
+                                                <img src={masterPreview} className="w-full h-full object-contain p-2" />
+                                                {isUploadingMaster && (
+                                                    <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
+                                                        <div className="text-center">
+                                                            <Loader2 className="animate-spin text-blue-600 mb-2" size={24}/>
+                                                            <span className="text-[9px] font-mono font-bold text-blue-900">UPLOADING...</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {/* Edit overlay */}
+                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                                    <span className="text-white text-xs font-mono uppercase">CHANGE FILE</span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="text-center text-zinc-400 p-4">
+                                                <UploadCloud className="mx-auto mb-2"/>
+                                                <span className="text-[9px] uppercase block">UPLOAD PNG/JPG</span>
+                                            </div>
+                                        )}
                                         <input ref={masterFileRef} type="file" accept="image/*" className="hidden" onChange={handleMasterUpload} />
                                     </div>
+                                    <p className="text-[9px] text-zinc-400 mt-2 text-center">
+                                        * Загружается в облако для обработки нейросетью.
+                                    </p>
                                 </div>
 
                                 <div className="flex-1">
@@ -557,3 +614,75 @@ const AdminProducts: React.FC = () => {
                                         ))}
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* PRODUCT IMAGES GALLERY */}
+                        <section>
+                            <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-2">Галерея товара</label>
+                            <div className="grid grid-cols-6 gap-2">
+                                {formData.images.map((img, idx) => (
+                                    <div key={idx} className="relative aspect-[3/4] group border border-zinc-200">
+                                        <img src={img} className="w-full h-full object-cover" />
+                                        <button onClick={() => removeImage(idx)} className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><X size={12}/></button>
+                                    </div>
+                                ))}
+                                <div onClick={() => fileInputRef.current?.click()} className="aspect-[3/4] border-2 border-dashed border-zinc-300 flex flex-col items-center justify-center cursor-pointer hover:border-black transition-colors">
+                                    {uploading ? <Loader2 className="animate-spin text-zinc-400"/> : <Plus size={24} className="text-zinc-300"/>}
+                                </div>
+                                <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleImageUpload} />
+                            </div>
+                        </section>
+
+                        {/* ... VARIANTS & ATTRIBUTES (Existing Code) ... */}
+                        <div className="grid grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-2">Категории</label>
+                                <div className="space-y-2">
+                                    {CATEGORIES.map(cat => (
+                                        <label key={cat} className="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" checked={formData.categories.includes(cat)} onChange={e => {
+                                                const newCats = e.target.checked ? [...formData.categories, cat] : formData.categories.filter(c => c !== cat);
+                                                setFormData({...formData, categories: newCats});
+                                            }} />
+                                            <span className="text-sm font-mono uppercase">{cat}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-2">Настройки доступа</label>
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={formData.isNew} onChange={e => setFormData({...formData, isNew: e.target.checked})} /><span className="text-sm font-mono uppercase text-blue-600 font-bold">NEW DROP</span></label>
+                                    <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={formData.isVipOnly} onChange={e => setFormData({...formData, isVipOnly: e.target.checked})} /><span className="text-sm font-mono uppercase text-purple-600 font-bold flex items-center gap-1"><Lock size={12}/> VIP ONLY</span></label>
+                                    <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={formData.isHidden} onChange={e => setFormData({...formData, isHidden: e.target.checked})} /><span className="text-sm font-mono uppercase text-red-600 font-bold">СКРЫТЬ ТОВАР</span></label>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* STOCK */}
+                        <section className="bg-zinc-50 p-4 border border-zinc-200">
+                            <label className="block text-[10px] font-mono uppercase text-zinc-500 mb-2">Складской учет</label>
+                            <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+                                {SIZES.map(size => (
+                                    <div key={size}>
+                                        <div className="text-[10px] font-bold text-center mb-1">{size}</div>
+                                        <input type="number" className="w-full border border-zinc-300 p-1 text-center text-sm" value={formData.variants[size] || 0} onChange={e => setFormData({...formData, variants: {...formData.variants, [size]: parseInt(e.target.value) || 0}})} />
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    </div>
+
+                    <div className="p-6 border-t border-black bg-white flex gap-4">
+                        <button onClick={handleSave} disabled={uploading} className="flex-1 bg-black text-white py-4 font-jura font-bold uppercase hover:bg-blue-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+                            {uploading ? <Loader2 className="animate-spin"/> : <Save size={18}/>} СОХРАНИТЬ ИЗМЕНЕНИЯ
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default AdminProducts;
