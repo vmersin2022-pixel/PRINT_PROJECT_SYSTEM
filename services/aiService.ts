@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 
 export const aiService = {
     // 1. Генерация текста (Название и Описание)
-    // Оставляем как есть, так как текстовые запросы обычно короткие и проходят напрямую
+    // Оставляем как есть, так как текстовые запросы обычно короткие и проходят напрямую стабильно
     generateProductDescription: async (name: string, categories: string[]) => {
         const prompt = `Ты креативный директор бренда одежды "PRINT PROJECT". 
         Данные: Название "${name}", Категории: ${categories.join(', ')}.
@@ -31,44 +31,46 @@ export const aiService = {
     },
 
     // 2. ГЕНЕРАЦИЯ ЛУКБУКА (Server-Side Only)
+    // Полностью переписано для использования только Edge Function
     generateLookbook: async (imageUrl: string, promptText: string) => {
         // Подготовка промпта
         const cleanPrompt = promptText.trim().replace(/\.$/, ''); 
         const enhancedPrompt = `${cleanPrompt}. The photo MUST feature a black t-shirt with the specific graphic design provided in the image input. High quality, photorealistic, 8k, professional fashion photography, detailed texture.`;
         
-        console.log("AI Generation: Sending request to Supabase Edge Function...");
+        console.log("AI Generation: Sending POST request to Supabase Edge Function...");
 
         try {
-            // Вызов серверной функции. Данные передаются в теле POST-запроса, 
-            // поэтому лимиты на длину URL больше не действуют.
+            // Вызов серверной функции 'generate-image'.
+            // Используем POST (передача body), что снимает ограничение на длину URL.
             const { data, error } = await supabase.functions.invoke('generate-image', {
                 body: {
                     prompt: enhancedPrompt,
                     imageUrl: imageUrl,
-                    model: 'flux', // Принудительно используем Flux
+                    model: 'flux', // Принудительно используем Flux для лучшего качества
                     width: 1024,
                     height: 1024,
                     seed: Math.floor(Math.random() * 1000000)
                 },
-                responseType: 'blob' // Ожидаем бинарный файл (картинку)
+                responseType: 'blob' // Ожидаем бинарный файл (картинку) в ответ
             });
 
             if (error) {
-                // Пытаемся прочитать текст ошибки, если он есть
+                // Логируем детали ошибки от Supabase/Deno
                 console.error("Edge Function Error Details:", error);
-                throw new Error(`Server Error: ${error.message || 'Unknown error'}`);
+                throw new Error(`Server Error: ${error.message || 'Unknown server error'}`);
             }
 
             if (!(data instanceof Blob)) {
                 throw new Error("Invalid server response format (Expected Blob)");
             }
 
-            console.log("Server generation successful! Image received.");
+            console.log("Server generation successful! Image blob received.");
+            // Создаем временную ссылку на полученный Blob для отображения в браузере
             return URL.createObjectURL(data);
 
         } catch (err: any) {
-            console.error("Generation Failed:", err);
-            // Прокидываем понятную ошибку на фронтенд
+            console.error("AI Generation Failed:", err);
+            // Прокидываем читаемую ошибку на UI
             throw new Error(`Ошибка генерации: ${err.message}. Попробуйте позже.`);
         }
     }
