@@ -3,9 +3,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 declare const Deno: any;
 
-// Получаем ключ из секретов Supabase ИЛИ используем хардкод-значение для быстрого старта
-const API_KEY = Deno.env.get('POLLINATIONS_API_KEY') || Deno.env.get('VITE_POLLINATIONS_KEY') || 'sk_U9eN3uLF7gwPgVR7VW1Nv5q6A5L8ujI1';
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -18,42 +15,41 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, imageUrl, model, width, height, seed } = await req.json();
+    const { prompt, imageUrl, model, width, height } = await req.json();
 
-    if (!API_KEY) {
-      console.warn("Warning: Server API Key is missing, using default.");
-    }
+    // 2. Security: Get API Key from Supabase Secrets (Best practice)
+    // Fallback to hardcoded key only if secret is not set
+    const API_KEY = Deno.env.get('POLLINATIONS_API_KEY') || 'sk_U9eN3uLF7gwPgVR7VW1Nv5q6A5L8ujI1';
 
-    // 2. Construct Pollinations URL
-    const selectedModel = model || 'flux'; 
-    const encodedPrompt = encodeURIComponent(prompt);
+    // 3. Construct the Pollinations Request
+    const selectedModel = model || 'flux';
+    const enhancedPrompt = `${prompt}. Professional fashion photography, high-end commercial style, 8k resolution, crisp details.`;
+    const encodedPrompt = encodeURIComponent(enhancedPrompt);
     
-    // Формируем URL
-    let url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=${selectedModel}&width=${width || 1024}&height=${height || 1024}&seed=${seed || 42}&nologo=true&enhance=false`;
+    let url = `https://image.pollinations.ai/prompt/${encodedPrompt}?model=${selectedModel}&width=${width || 1024}&height=${height || 1024}&nologo=true&seed=${Math.floor(Math.random() * 1000000)}&enhance=false`;
     
     if (imageUrl) {
-        const encodedImage = encodeURIComponent(imageUrl);
-        url += `&image=${encodedImage}`;
+        url += `&image=${encodeURIComponent(imageUrl)}`;
     }
 
-    // 3. Server-to-Server Request with Authorization Header
-    console.log(`Proxying to AI (Model: ${selectedModel})...`);
-    
+    console.log(`AI Proxy: Requesting from Pollinations (Model: ${selectedModel})...`);
+
+    // 4. Server-to-Server Fetch (Authorized)
     const response = await fetch(url, {
         method: 'GET',
         headers: {
             'Authorization': `Bearer ${API_KEY}`,
-            'User-Agent': 'PrintProjectProxy/1.0'
+            'User-Agent': 'PrintProjectProxy/2.0'
         }
     });
 
     if (!response.ok) {
         const errText = await response.text();
-        console.error("AI Provider Error Body:", errText);
+        console.error("Pollinations Provider Error:", errText);
         throw new Error(`AI Provider Error: ${response.status} ${response.statusText}`);
     }
 
-    // 4. Return Image Blob directly
+    // 5. Stream the Image Blob back to Frontend
     const imageBlob = await response.blob();
 
     return new Response(imageBlob, {

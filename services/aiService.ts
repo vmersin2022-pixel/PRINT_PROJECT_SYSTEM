@@ -2,12 +2,14 @@
 import { supabase } from '../supabaseClient';
 
 export const aiService = {
-    // 1. Генерация текста (Название и Описание)
-    // Оставляем как есть, так как текстовые запросы легкие и работают стабильно
+    /**
+     * ГЕНЕРАЦИЯ ТЕКСТА
+     * Текстовые запросы легкие, поэтому используем прямой POST запрос к Pollinations API.
+     */
     generateProductDescription: async (name: string, categories: string[]) => {
         const prompt = `Ты креативный директор бренда одежды "PRINT PROJECT". 
         Данные: Название "${name}", Категории: ${categories.join(', ')}.
-        Задача: Придумай название и техническое описание. 
+        Задача: Придумай короткое продающее название и техническое описание. 
         Верни ТОЛЬКО чистый JSON объект: { "name": "...", "description": "..." }`;
 
         try {
@@ -26,53 +28,51 @@ export const aiService = {
             return JSON.parse(cleanJson);
         } catch (e) {
             console.error("Text Gen Error:", e);
-            return { name: name, description: "Автоматическое описание (API Error)" };
+            return { name: name, description: "Автоматическое описание временно недоступно." };
         }
     },
 
-    // 2. ГЕНЕРАЦИЯ ЛУКБУКА (Server-Side Only)
-    // Полностью переписано для использования только Edge Function
-    // Убран любой fallback на Public Tier, чтобы избежать ошибок 502/Rate Limit
+    /**
+     * ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ (Lookbook)
+     * СТРОГО ЧЕРЕЗ ПРОКСИ (Edge Function). 
+     * Решает проблему CORS, Rate Limits и 502 (длинные URL).
+     */
     generateLookbook: async (imageUrl: string, promptText: string) => {
-        // Подготовка промпта
-        const cleanPrompt = promptText.trim().replace(/\.$/, ''); 
-        const enhancedPrompt = `${cleanPrompt}. The photo MUST feature a black t-shirt with the specific graphic design provided in the image input. High quality, photorealistic, 8k, professional fashion photography, detailed texture.`;
+        console.log("AI Proxy: Initiating secure server-side generation...");
         
-        console.log("AI Generation: Sending POST request to Supabase Edge Function (Server-Side V2)...");
-
         try {
-            // Вызов серверной функции 'generate-image'.
-            // Используем POST (передача body), что снимает ограничение на длину URL.
+            // Вызываем функцию в Supabase. Она сама знает секретный ключ (из env).
             const { data, error } = await supabase.functions.invoke('generate-image', {
                 body: {
-                    prompt: enhancedPrompt,
+                    prompt: promptText,
                     imageUrl: imageUrl,
-                    model: 'flux', // Принудительно используем Flux для лучшего качества
+                    model: 'flux',
                     width: 1024,
-                    height: 1024,
-                    seed: Math.floor(Math.random() * 1000000)
+                    height: 1024
                 },
-                responseType: 'blob' // Ожидаем бинарный файл (картинку) в ответ
+                responseType: 'blob' // Получаем картинку как бинарный объект напрямую
             });
 
             if (error) {
-                // Логируем детали ошибки от Supabase/Deno
                 console.error("Edge Function Error Details:", error);
-                throw new Error(`Server Error: ${error.message || 'Unknown server error'}`);
+                throw new Error(error.message || "Ошибка сервера при генерации");
             }
 
             if (!(data instanceof Blob)) {
-                throw new Error("Invalid server response format (Expected Blob)");
+                throw new Error("Неверный формат ответа от сервера (ожидался Blob)");
             }
 
-            console.log("Server generation successful! Image blob received.");
-            // Создаем временную ссылку на полученный Blob для отображения в браузере
+            console.log("Image received successfully via proxy.");
+            // Создаем временную локальную ссылку для предпросмотра
             return URL.createObjectURL(data);
 
         } catch (err: any) {
             console.error("AI Generation Failed:", err);
-            // Прокидываем читаемую ошибку на UI
-            throw new Error(`Ошибка генерации: ${err.message}. Попробуйте позже.`);
+            // Если ошибка "Requested entity was not found", значит функция не развернута
+            const userFriendlyError = err.message.includes('404') 
+                ? "Прокси-сервер не найден. Проверьте развертывание Edge Function."
+                : err.message;
+            throw new Error(`Генерация не удалась: ${userFriendlyError}`);
         }
     }
 };
