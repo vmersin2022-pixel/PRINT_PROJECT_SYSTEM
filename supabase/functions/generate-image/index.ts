@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 declare const Deno: any;
 
-// Получаем ключ из секретов Supabase ИЛИ используем хардкод-значение из .env для быстрого старта
+// Получаем ключ из секретов Supabase ИЛИ используем хардкод-значение для быстрого старта
 const API_KEY = Deno.env.get('POLLINATIONS_API_KEY') || Deno.env.get('VITE_POLLINATIONS_KEY') || 'sk_U9eN3uLF7gwPgVR7VW1Nv5q6A5L8ujI1';
 
 const corsHeaders = {
@@ -21,11 +21,10 @@ serve(async (req) => {
     const { prompt, imageUrl, model, width, height, seed } = await req.json();
 
     if (!API_KEY) {
-      throw new Error('Server API Key not configured');
+      console.warn("Warning: Server API Key is missing, using default.");
     }
 
     // 2. Construct Pollinations URL
-    // Используем 'flux' как более стабильную модель, или то что передали
     const selectedModel = model || 'flux'; 
     const encodedPrompt = encodeURIComponent(prompt);
     
@@ -38,7 +37,7 @@ serve(async (req) => {
     }
 
     // 3. Server-to-Server Request with Authorization Header
-    console.log("Proxying to AI with Key:", API_KEY.slice(0, 5) + "...");
+    console.log(`Proxying to AI (Model: ${selectedModel})...`);
     
     const response = await fetch(url, {
         method: 'GET',
@@ -50,7 +49,7 @@ serve(async (req) => {
 
     if (!response.ok) {
         const errText = await response.text();
-        console.error("AI Error Body:", errText);
+        console.error("AI Provider Error Body:", errText);
         throw new Error(`AI Provider Error: ${response.status} ${response.statusText}`);
     }
 
@@ -67,7 +66,7 @@ serve(async (req) => {
     })
 
   } catch (error: any) {
-    console.error("Function Error:", error.message);
+    console.error("Edge Function Critical Error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
